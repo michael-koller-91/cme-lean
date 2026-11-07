@@ -1,0 +1,15 @@
+name = "GmmLean"
+version = "0.1.0"
+defaultTargets = ["gmmlean"]
+
+[[lean_lib]]
+name = "GmmLean"
+
+[[lean_exe]]
+name = "gmmlean"
+root = "Main"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+
