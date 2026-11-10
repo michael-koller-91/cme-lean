@@ -22,10 +22,9 @@ theorem integral_norm_gaussian_bounded
   (hA : IsUnit A.det)
   (y : EuclideanSpace ℝ (Fin n))
   :
-  ∃ (C : ℝ), ∫ (h : EuclideanSpace ℝ (Fin n)),
+  MeasureTheory.Integrable (fun (h : EuclideanSpace ℝ (Fin n)) =>
     ‖h‖
     * multivariateGaussianPDF n (0 : Fin n → ℝ) S hS (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
-    * (1 / Real.sqrt ( (A⁻¹ * A⁻¹ᵀ).det )) ∂volume
-    ≤ C
+    * (1 / Real.sqrt ( (A⁻¹ * A⁻¹ᵀ).det ))) volume
   := by
   sorry
