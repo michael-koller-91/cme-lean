@@ -102,3 +102,49 @@ declarations still have `sorry` warnings, and `#print axioms <lemma>` confirms a
 (no `sorryAx`). After filling everything, run `lake env lean Main.lean` to confirm the proof
 compiles; success means no errors (warnings such as unused variables are fine). If a step fails,
 isolate it as a private lemma first and debug it separately.
+
+## Status (updated 2026-11-10)
+
+**Step 1 is DONE (proved in `Main.lean`, verified with `lake env lean Main.lean`).**
+
+Lemmas proved in `Main.lean`:
+
+* `transpose_nonsing_inv (hA : IsUnit A.det) : (Aᵀ)⁻¹ = (A⁻¹)ᵀ` — helper, by
+  `Matrix.inv_eq_right_inv` of `Aᵀ * (A⁻¹)ᵀ = 1`.
+* `sigmaTilde_posDef` — via `Matrix.posDef_iff_posSemidef_and_mulVec_injective`:
+  PosSemidef part from `Matrix.IsUnit.posSemidef_star_left_conjugate_iff hTU`
+  (with `star ((A⁻¹)ᵀ) = A⁻¹` by `ext; simp`); mulVec-injectivity chains
+  `(A⁻¹)ᵀ`, `S`, `A⁻¹` injectivity via `congrArg` + `Matrix.mulVec_mulVec`.
+* `quadForm_eq (hSdet) (hA) u w : ((Σ̃)⁻¹ *ᵥ (u - A⁻¹·w)) ⬝ᵥ (u - A⁻¹·w)
+  = (S⁻¹ *ᵥ (w - A·u)) ⬝ᵥ (w - A·u)` — via the sandwich product `h1` (calc with
+  `mul_assoc`/`nonsing_inv_mul`), `Matrix.inv_eq_left_inv h1`, then
+  `mulVec_mulVec`/`dotProduct_comm`/`dotProduct_transpose_mulVec`/`mulVec_sub`/
+  `mulVec_neg`/`neg_dotProduct_neg`.
+* `density_id` — helper scalar facts `hSigdet : (A⁻¹ S A⁻ᵀ).det = S.det / (A.det)²`,
+  `hAdet2`, `hAdetc : 1 / √((A⁻¹ A⁻ᵀ).det) = |A.det|`, and
+  `hKey : c * ((2π)^((n:ℝ)/2) * √S.det)⁻¹ = ((2π)^((n:ℝ)/2) * √(A⁻¹ S A⁻ᵀ).det)⁻¹`
+  (proved by `rw [hAdetc, hSigdet, Real.sqrt_div, Real.sqrt_sq_eq_abs]; field_simp [hZne, hSdne, hAbsne]`),
+  then tail: `simp only [multivariateGaussianPDF, sub_zero]; rw [quadForm_eq …];
+  rw [← mul_assoc c ((2π)^((n:ℝ)/2) * √S.det)⁻¹, hKey]`.
+
+Key gotchas discovered (important for future steps):
+
+1. `(2 * Real.pi) ^ (↑n / 2)` in a typed-ℝ context elaborates the exponent as
+   `n / 2 : ℕ` (instance `HPow Real Nat Real` via `Monoid.toNPow`), i.e. an **integer** power,
+   NOT `Real.rpow`. The PDF's `((n : ℝ) / 2)` exponent is `rpow`. Writing `↑n / 2` caused
+   silent rewrite mismatches. Always write the exponent as `((n : ℝ) / 2)`.
+2. `norm_num` LOOPS (deterministic timeout / heartbeat exhaustion) when asked to prove
+   `0 < 2 * Real.pi` (it tries to compute `Real.pi`). Use `positivity` instead — it has a
+   dedicated hook for `Real.pi` (`Real.rpow_pos_of_pos` extension). Unknown identifiers +
+   `autoImplicit` also masquerade as massive elaboration timeouts.
+3. `mul_assoc : a * b * c = a * (b * c)`; goal `c * (X * E)` reproduces with `← mul_assoc`
+   with **explicit** first two args; bare `mul_assoc` as rewrite matches unrelated matrix
+   products.
+4. In `density_id`, no sign juggling needed: `simp only [multivariateGaussianPDF, sub_zero]`
+   produces LHS quad `(S⁻¹ *ᵥ (y - A·h)) ⬝ᵥ (y - A·h)` and RHS quad
+   `((Σ̃)⁻¹ *ᵥ (h - A⁻¹·y)) ⬝ᵥ (h - A⁻¹·y)` — exactly `quadForm_eq u w` with `u := h, w := y`.
+5. `WithLp.ofLp_toLp` is not needed in the tail simp (the coercion resolves before).
+
+**Remaining:** Step 2 (`stdGaussian_eq_withDensity`, generalized over finite `ι`),
+Step 3 (`multivariateGaussian_eq_withDensity`, generalized), Steps 4–5 inline glue;
+the theorem `integral_norm_gaussian_bounded` still has `sorry`.
