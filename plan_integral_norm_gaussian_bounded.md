@@ -148,3 +148,39 @@ Key gotchas discovered (important for future steps):
 **Remaining:** Step 2 (`stdGaussian_eq_withDensity`, generalized over finite `ι`),
 Step 3 (`multivariateGaussian_eq_withDensity`, generalized), Steps 4–5 inline glue;
 the theorem `integral_norm_gaussian_bounded` still has `sorry`.
+
+### Sub-step 2a — DONE (proved in `Main.lean`)
+
+`stdGaussianDensity_integral_one {ι} [Fintype ι] :
+  ∫ x : EuclideanSpace ℝ ι, (2π)^(-(card ι : ℝ)/2) * Real.exp (-‖x‖²/2) = 1`
+
+Needed so that `volume.withDensity (fun x => …)` is a probability measure — the
+`IsFiniteMeasure` ingredient for `Measure.ext_of_charFun` in sub-step 2c (and reusable
+in Step 4's withDensity bridge). It is the `c = 0`, `b = 1/2` case of
+`GaussianFourier.integral_rexp_neg_mul_sq_norm`
+(import `Mathlib.Analysis.SpecialFunctions.Gaussian.FourierTransform`;
+the lemmas live in namespace `GaussianFourier`, ambient `V` needs
+`NormedAddCommGroup/InnerProductSpace ℝ/FiniteDimensional/MeasurableSpace/BorelSpace`).
+
+Proof recipe (works verbatim):
+```
+have hb : 0 < (1/2 : ℝ) := by norm_num
+have hf : ∀ x, Real.exp (-‖x‖^2/2) = Real.exp (-(1/2) * ‖x‖^2) := fun x => by congr 1; ring
+have h0 : ∫ x, Real.exp (-‖x‖^2/2) ∂volume = (2π)^((card ι : ℝ)/2) := by
+  simp only [hf]
+  rw [GaussianFourier.integral_rexp_neg_mul_sq_norm (V := EuclideanSpace ℝ ι) hb,
+      finrank_euclideanSpace,
+      show (Real.pi / (1/2 : ℝ)) = 2 * Real.pi from by ring]
+have hne : (2π)^((card ι : ℝ)/2) ≠ 0 := by positivity
+rw [integral_const_mul, h0, neg_div, Real.rpow_neg, inv_mul_cancel₀ hne]; positivity
+```
+Gotchas: `Real.rpow_neg` leaves side goal `0 ≤ 2 * π` (close with `positivity` after the
+main goal closes); `finrank_euclideanSpace` is a simp lemma equal to `Fintype.card ι`;
+`ring` proves `(π : ℝ)/(1/2) = 2 * π` and the exponent reshuffle (`congr 1; ring`);
+`inv_mul_cancel₀` (not `mul_inv_cancel₀`) since the inverse is on the LEFT.
+
+**Remaining in Step 2:** 2b — `charFun (volume.withDensity (fun x => (2π)^(-(card ι : ℝ)/2) *
+Real.exp (-‖x‖²/2))) t = exp(-‖t‖²/2)`; reduce via `charFun_apply` (`charFun μ t =
+∫ x, exp (⟪x, t⟫ * I) ∂μ`) to `GaussianFourier.integral_cexp_neg_mul_sq_norm_add` with
+`b = 1/2` and `c = ±I`; then 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
+(needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).

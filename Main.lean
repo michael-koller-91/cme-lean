@@ -4,6 +4,7 @@ import Mathlib.Probability.Distributions.Gaussian.Multivariate
 import Mathlib.Probability.Distributions.Gaussian.Fernique
 import Mathlib.Analysis.InnerProductSpace.PiL2
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Analysis.SpecialFunctions.Gaussian.FourierTransform
 import Mathlib.MeasureTheory.Function.Jacobian
 
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
@@ -143,6 +144,31 @@ theorem density_id
   rw [quadForm_eq S hSU A hA]
   rw [← mul_assoc (1 / Real.sqrt ((A⁻¹ * (A⁻¹)ᵀ).det))
     (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹), hKey]
+
+/-- Sub-step 2a of `plan_integral_norm_gaussian_bounded.md` (Step 2): the standard Gaussian
+density `(2π)^(-card ι / 2) · exp(-‖x‖²/2)` integrates to `1` over `EuclideanSpace ℝ ι`.
+This makes `volume.withDensity` of it a probability measure (needed for
+`Measure.ext_of_charFun` in sub-step 2c) and is the `c = 0` case of Mathlib's Gaussian
+Fourier integral `GaussianFourier.integral_rexp_neg_mul_sq_norm` with `b = 1/2`. -/
+theorem stdGaussianDensity_integral_one
+    {ι : Type*}
+    [Fintype ι]
+    :
+    ∫ x : EuclideanSpace ℝ ι,
+      (2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-‖x‖ ^ 2 / 2) = 1 := by
+  have hb : 0 < (1 / 2 : ℝ) := by norm_num
+  have hf : ∀ x : EuclideanSpace ℝ ι,
+      Real.exp (-‖x‖ ^ 2 / 2) = Real.exp (-(1 / 2) * ‖x‖ ^ 2) :=
+    fun x => by congr 1; ring
+  have h0 : ∫ x : EuclideanSpace ℝ ι, Real.exp (-‖x‖ ^ 2 / 2) ∂volume
+      = (2 * Real.pi) ^ ((Fintype.card ι : ℝ) / 2) := by
+    simp only [hf]
+    rw [GaussianFourier.integral_rexp_neg_mul_sq_norm (V := EuclideanSpace ℝ ι) hb]
+    rw [finrank_euclideanSpace]
+    rw [show (Real.pi / (1 / 2 : ℝ)) = 2 * Real.pi from by ring]
+  have hne : (2 * Real.pi) ^ ((Fintype.card ι : ℝ) / 2) ≠ 0 := by positivity
+  rw [integral_const_mul, h0, neg_div, Real.rpow_neg, inv_mul_cancel₀ hne]
+  positivity
 
 theorem integral_norm_gaussian_bounded
   (n : ℕ)
