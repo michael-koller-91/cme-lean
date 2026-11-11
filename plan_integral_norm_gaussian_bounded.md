@@ -184,3 +184,59 @@ Real.exp (-‖x‖²/2))) t = exp(-‖t‖²/2)`; reduce via `charFun_apply` (`c
 ∫ x, exp (⟪x, t⟫ * I) ∂μ`) to `GaussianFourier.integral_cexp_neg_mul_sq_norm_add` with
 `b = 1/2` and `c = ±I`; then 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
 (needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).
+
+### Sub-step 2b — DONE (proved in `Main.lean`)
+
+`charFun_stdGaussianDensity {ι} [Fintype ι] (t : EuclideanSpace ℝ ι) :
+  charFun (volume.withDensity (fun x => ENNReal.ofReal ((2π)^(-(card ι : ℝ)/2) *
+    Real.exp (-(1/2) * ‖x‖^2)))) t = Complex.exp (-‖t‖^2 / 2)`
+
+Proof recipe (compiles verbatim; in `Main.lean` write `Complex.I`/`Complex.exp` explicitly
+since `Complex` is not opened there):
+1. Setup: `hb : 0 < ((1/2 : ℝ) : ℂ).re := by norm_num`; `h2pi : 0 < 2 * Real.pi := by positivity`;
+   `hne : (2π)^((card ι : ℝ)/2) ≠ 0 := by positivity`; `hpos : ∀ x, 0 ≤ (2π)^(-(card ι : ℝ)/2) *
+   Real.exp (-(1/2) * ‖x‖^2) := fun x => by positivity`.
+2. `hpoint` (ℝ≥0∞→ℂ scalar bridge):
+   `(ENNReal.ofReal f).toReal • cexp (↑⟪x,t⟫ * I) = ↑((2π)^(-(card ι:ℝ)/2)) * (↑(rexp (-1/2*‖x‖^2)) * cexp (↑⟪x,t⟫ * I))`
+   by `rw [ENNReal.toReal_ofReal (hpos x), Complex.real_smul, Complex.ofReal_mul, mul_assoc]`.
+   Gotchas: `smul_eq_mul` FAILS for ℝ • ℂ (different smul instance) — `Complex.real_smul :
+   x • z = x * z` is the right lemma (ℝ-scalar mul on ℂ is defeq to `↑x * z`); state the RHS so
+   the real `rexp` factor is wrapped in `Complex.ofReal` explicitly (else the elaborator inserts
+   `↑(rexp …)` which the next step's `simp only` won't line up with).
+3. `hint` (pointwise exp-of-sum):
+   `↑(rexp (-(1/2)*‖x‖^2)) * cexp (↑⟪x,t⟫ * I) = cexp (-↑(1/2) * (↑‖x‖)^2 + I * ↑⟪t,x⟫)`
+   by `rw [Complex.ofReal_exp, ← Complex.exp_add, Complex.ofReal_mul, Complex.ofReal_pow,
+   Complex.ofReal_neg, real_inner_comm t x, mul_comm (Complex.ofReal (inner ℝ t x)) Complex.I]`.
+   Gotchas: the STATEMENT must write `Complex.ofReal ‖x‖ ^ 2` (coerce norm, then square) — NOT
+   `Complex.ofReal (‖x‖ ^ 2)` — because the rewrite only proves the goal up to defeq, but
+   `simp only [hint]` uses the STATED RHS; the resulting integrand then matches
+   `integral_cexp_neg_mul_sq_norm_add`'s `-b * ↑‖v‖ ^ 2 + c * ⟪w, v⟫` shape. After
+   `real_inner_comm t x` the inner is `inner ℝ t x`, so the final `mul_comm` must target
+   `inner ℝ t x`.
+4. Main chain: `rw [charFun_apply, integral_withDensity_eq_integral_toReal_smul₀ (by fun_prop)
+   (by simp)]` (ℝ≥0∞ density; the a.e.-finiteness side goal closes `by simp` via
+   `ENNReal.ofReal_lt_top`), then `simp only [hpoint, hint]`, then
+   `rw [integral_const_mul, GaussianFourier.integral_cexp_neg_mul_sq_norm_add hb Complex.I t, …]`
+   with `b = ((1/2 : ℝ) : ℂ)`, `c = Complex.I`, `w = t`.
+5. Scalar endgame after the Fourier rewrite:
+   ```
+   finrank_euclideanSpace,
+   ← Complex.ofReal_div,
+   show (Real.pi / (1 / 2 : ℝ)) = 2 * Real.pi from by ring,
+   show (((Fintype.card ι : ℕ) : ℂ) / (2 : ℂ)) = Complex.ofReal ((Fintype.card ι : ℝ) / 2) from by push_cast; rfl,
+   ← Complex.ofReal_cpow h2pi.le ((Fintype.card ι : ℝ) / 2),
+   neg_div,
+   Real.rpow_neg h2pi.le ((Fintype.card ι : ℝ) / 2),
+   ← mul_assoc, ← Complex.ofReal_mul, inv_mul_cancel₀ hne,
+   Complex.ofReal_one, one_mul,
+   Complex.I_sq, neg_one_mul,
+   show ((4 : ℂ) * ((1 / 2 : ℝ) : ℂ)) = 2 from by norm_num
+   ```
+   Gotchas: the Fourier lemma's cpow exponent elaborates as `(↑(Fintype.card ι : ℕ) : ℂ) / (2 : ℂ)`
+   (ℕ-cast division IN ℂ, not ofReal of the division) — bridge with the `push_cast; rfl` `show`
+   before `← Complex.ofReal_cpow`; `neg_div` is needed before `Real.rpow_neg` because
+   `-(card : ℝ) / 2` elaborates as `(-card)/2` while `rpow_neg` needs `x ^ (-(y))`; pass explicit
+   args to `Real.rpow_neg`/`Complex.ofReal_cpow` (else `0 ≤ x` surfaces as an rw side goal).
+
+**Remaining in Step 2:** 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
+(needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).

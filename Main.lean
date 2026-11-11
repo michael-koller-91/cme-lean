@@ -170,6 +170,59 @@ theorem stdGaussianDensity_integral_one
   rw [integral_const_mul, h0, neg_div, Real.rpow_neg, inv_mul_cancel₀ hne]
   positivity
 
+/-- Sub-step 2b of `plan_integral_norm_gaussian_bounded.md` (Step 2): the characteristic
+function of `volume.withDensity` of the standard Gaussian density is `exp(-‖t‖²/2)`,
+i.e. it coincides with `charFun_stdGaussian` from Mathlib. Combined with 2a (the density
+measure is a probability measure) this feeds `Measure.ext_of_charFun` in sub-step 2c. -/
+theorem charFun_stdGaussianDensity
+    {ι : Type*}
+    [Fintype ι]
+    (t : EuclideanSpace ℝ ι)
+    :
+    charFun (volume.withDensity (fun x => ENNReal.ofReal
+      ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2)))) t
+      = Complex.exp (-‖t‖ ^ 2 / 2) := by
+  have hb : 0 < ((1 / 2 : ℝ) : ℂ).re := by norm_num
+  have h2pi : 0 < 2 * Real.pi := by positivity
+  have hne : (2 * Real.pi) ^ ((Fintype.card ι : ℝ) / 2) ≠ 0 := by positivity
+  have hpos : ∀ x : EuclideanSpace ℝ ι,
+      0 ≤ (2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2) :=
+    fun x => by positivity
+  have hpoint : ∀ x : EuclideanSpace ℝ ι,
+      (ENNReal.ofReal ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2))).toReal
+        • Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)
+      = (Complex.ofReal ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2)))
+        * (Complex.ofReal (Real.exp (-(1 / 2) * ‖x‖ ^ 2))
+          * Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)) := by
+    intro x
+    rw [ENNReal.toReal_ofReal (hpos x), Complex.real_smul, Complex.ofReal_mul, mul_assoc]
+  have hint : ∀ x : EuclideanSpace ℝ ι,
+      Complex.ofReal (Real.exp (-(1 / 2) * ‖x‖ ^ 2))
+        * Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)
+      = Complex.exp (-(Complex.ofReal (1 / 2)) * Complex.ofReal ‖x‖ ^ 2
+          + Complex.I * Complex.ofReal (inner ℝ t x)) := by
+    intro x
+    rw [Complex.ofReal_exp, ← Complex.exp_add, Complex.ofReal_mul, Complex.ofReal_pow,
+      Complex.ofReal_neg, real_inner_comm t x, mul_comm (Complex.ofReal (inner ℝ t x)) Complex.I]
+  rw [charFun_apply]
+  rw [integral_withDensity_eq_integral_toReal_smul₀ (by fun_prop) (by simp)]
+  simp only [hpoint, hint]
+  rw [integral_const_mul,
+    GaussianFourier.integral_cexp_neg_mul_sq_norm_add hb Complex.I t,
+    finrank_euclideanSpace,
+    ← Complex.ofReal_div,
+    show (Real.pi / (1 / 2 : ℝ)) = 2 * Real.pi from by ring,
+    show (((Fintype.card ι : ℕ) : ℂ) / (2 : ℂ)) = Complex.ofReal ((Fintype.card ι : ℝ) / 2) from by push_cast; rfl,
+    ← Complex.ofReal_cpow h2pi.le ((Fintype.card ι : ℝ) / 2),
+    neg_div,
+    Real.rpow_neg h2pi.le ((Fintype.card ι : ℝ) / 2),
+    ← mul_assoc,
+    ← Complex.ofReal_mul,
+    inv_mul_cancel₀ hne,
+    Complex.ofReal_one, one_mul,
+    Complex.I_sq, neg_one_mul,
+    show ((4 : ℂ) * ((1 / 2 : ℝ) : ℂ)) = 2 from by norm_num]
+
 theorem integral_norm_gaussian_bounded
   (n : ℕ)
   (S : Matrix (Fin n) (Fin n) ℝ)
