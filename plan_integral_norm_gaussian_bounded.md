@@ -240,3 +240,33 @@ since `Complex` is not opened there):
 
 **Remaining in Step 2:** 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
 (needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).
+
+### Sub-step 2c — DONE (proved in `Main.lean`)
+
+`stdGaussian_eq_withDensity {ι} [Fintype ι] :
+  stdGaussian (EuclideanSpace ℝ ι) = volume.withDensity (fun x => ENNReal.ofReal
+    ((2π)^(-(card ι : ℝ)/2) * Real.exp (-(1/2) * ‖x‖^2)))`
+
+**Step 2 is now complete.** Proof recipe:
+1. `IsFiniteMeasure` for the density measure (the only new ingredient — `stdGaussian`'s side
+   comes from Mathlib's instance `isProbabilityMeasure_stdGaussian`, which extends it):
+   - reshape 2a: `hexp : ∀ x, Real.exp (-(1/2)*‖x‖^2) = Real.exp (-‖x‖^2/2) := fun x => by
+     congr 1; ring`, then `hint : ∫ x, (2π)^(-(card ι : ℝ)/2) * Real.exp (-(1/2)*‖x‖^2) = 1`
+     by `simp only [hexp]; exact stdGaussianDensity_integral_one`;
+   - `hfin : Integrable (fun x => …) volume := Integrable.of_integral_ne_zero (by rw [hint]; norm_num)`
+     — the trick: `Integrable.of_integral_ne_zero` needs only `∫ f ≠ 0`, which 2a gives for free
+     (no separate integrability argument needed);
+   - `hlint : ∫⁻ x, ENNReal.ofReal f ∂volume = 1` by
+     `rw [← ofReal_integral_eq_lintegral_ofReal hfin (Eventually.of_forall fun x => by positivity),
+     hint, ENNReal.ofReal_one]` (`ofReal_integral_eq_lintegral_ofReal` lives in
+     `Mathlib/MeasureTheory/Integral/Bochner/Basic.lean`);
+   - `have : IsFiniteMeasure (volume.withDensity f) := isFiniteMeasure_withDensity
+     (by rw [hlint]; simp)` (`isFiniteMeasure_withDensity (hf : ∫⁻ a, f a ∂μ ≠ ∞)`).
+2. Conclusion: `refine Measure.ext_of_charFun (funext fun t => ?_)`, then
+   `rw [charFun_stdGaussian, charFun_stdGaussianDensity]` — both sides become
+   `Complex.exp (-‖t‖^2/2)`. Instances needed by `Measure.ext_of_charFun`
+   (`CompleteSpace`, `BorelSpace`, `SecondCountableTopology`, `IsFiniteMeasure` on both
+   sides) are all available for `EuclideanSpace ℝ ι` automatically.
+
+**Remaining:** Step 3 (`multivariateGaussian_eq_withDensity`, generalized over finite `ι`),
+Steps 4–5 inline glue; the theorem `integral_norm_gaussian_bounded` still has `sorry`.

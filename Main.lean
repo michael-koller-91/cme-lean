@@ -223,6 +223,39 @@ theorem charFun_stdGaussianDensity
     Complex.I_sq, neg_one_mul,
     show ((4 : ℂ) * ((1 / 2 : ℝ) : ℂ)) = 2 from by norm_num]
 
+/-- Sub-step 2c of `plan_integral_norm_gaussian_bounded.md` (Step 2): the standard Gaussian
+measure `stdGaussian` equals `volume.withDensity` of the standard Gaussian density.
+Via `Measure.ext_of_charFun` it suffices to compare characteristic functions, using
+`charFun_stdGaussian` (Mathlib) and `charFun_stdGaussianDensity` (sub-step 2b); the
+`IsFiniteMeasure` instance on the density side is derived from sub-step 2a
+(`isFiniteMeasure_withDensity` needs `∫⁻ x, ENNReal.ofReal f ∂volume ≠ ∞`, which follows
+from `∫ x, f x = 1` via `ofReal_integral_eq_lintegral_ofReal`). -/
+theorem stdGaussian_eq_withDensity
+    {ι : Type*}
+    [Fintype ι]
+    :
+    stdGaussian (EuclideanSpace ℝ ι) = volume.withDensity (fun x => ENNReal.ofReal
+      ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2))) := by
+  have hexp : ∀ x : EuclideanSpace ℝ ι,
+      Real.exp (-(1 / 2) * ‖x‖ ^ 2) = Real.exp (-‖x‖ ^ 2 / 2) := fun x => by congr 1; ring
+  have hint : ∫ x : EuclideanSpace ℝ ι,
+      (2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2) = 1 := by
+    simp only [hexp]
+    exact stdGaussianDensity_integral_one
+  have hfin : Integrable (fun x : EuclideanSpace ℝ ι =>
+      (2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2)) volume :=
+    Integrable.of_integral_ne_zero (by rw [hint]; norm_num)
+  have hlint : ∫⁻ x : EuclideanSpace ℝ ι, ENNReal.ofReal
+      ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2)) ∂volume = 1 := by
+    rw [← ofReal_integral_eq_lintegral_ofReal hfin
+      (Eventually.of_forall fun x => by positivity)]
+    rw [hint, ENNReal.ofReal_one]
+  have hmeas : IsFiniteMeasure (volume.withDensity (fun x : EuclideanSpace ℝ ι => ENNReal.ofReal
+      ((2 * Real.pi) ^ (-(Fintype.card ι : ℝ) / 2) * Real.exp (-(1 / 2) * ‖x‖ ^ 2)))) :=
+    isFiniteMeasure_withDensity (by rw [hlint]; simp)
+  refine Measure.ext_of_charFun (funext fun t => ?_)
+  rw [charFun_stdGaussian, charFun_stdGaussianDensity]
+
 theorem integral_norm_gaussian_bounded
   (n : ℕ)
   (S : Matrix (Fin n) (Fin n) ℝ)
