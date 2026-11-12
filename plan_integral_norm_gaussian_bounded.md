@@ -145,7 +145,7 @@ Key gotchas discovered (important for future steps):
    `((Σ̃)⁻¹ *ᵥ (h - A⁻¹·y)) ⬝ᵥ (h - A⁻¹·y)` — exactly `quadForm_eq u w` with `u := h, w := y`.
 5. `WithLp.ofLp_toLp` is not needed in the tail simp (the coercion resolves before).
 
-(Superseded — Steps 2 and 3 are done; see the sub-step sections below and the final
+(Superseded — all steps are done; see the sub-step sections below and the final
 **Remaining** at the end of this Status section.)
 
 ### Sub-step 2a — DONE (proved in `Main.lean`)
@@ -347,6 +347,77 @@ Step-3 gotchas (verified by compile):
 * `set B := CFC.sqrt S with hBdef` then state helpers against `B`; `exact hquad n S hS h`
   closes the `B`-form goal by defeq (the `rw [← hBdef] at *` in the prototype is a no-op).
 
-**Remaining:** Steps 4–5 inline glue (`integrable_withDensity_iff_integrable_smul₀'` +
-`IsGaussian.integrable_id` + `Integrable.norm` via `Measure.ext_of_charFun`); the theorem
-`integral_norm_gaussian_bounded` still has `sorry`.
+**Remaining:** none — all five steps are proved; `integral_norm_gaussian_bounded` is complete
+(see "Steps 4–5" below).
+
+### Steps 4–5 — DONE (proved in `Main.lean`)
+
+New theorems in `Main.lean` (all verified with `lake env lean Main.lean`; `#print axioms` on the
+main theorem and all helpers shows only `[propext, Classical.choice, Quot.sound]`, no `sorryAx`):
+
+* `integral_multivariateGaussianPDF_one (n) (μ : EuclideanSpace ℝ (Fin n)) (S) (hS : S.PosDef) :
+  ∫ x, multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x ∂volume = 1` — Step 4. CFC bundle as in
+  Step 3, `hshift` (PDF at `μ + B y` collapses to the standard density:
+  `rw [hpdf, hcoep y, hquad' y, ← neg_div]` — the `← neg_div` is REQUIRED because the rewritten
+  exponent is `-(‖y‖²/2)` (Neg(Div)) while the stated RHS is `-‖y‖²/2` (Div(Neg)) and they are
+  NOT defeq), then `hstep` (defeq-chained `Eq.trans hsub (congrArg _ (Eq.trans
+  (integral_congr_ae …) (integral_const_mul …)))`, same pattern as Step 3's `hstep2`), extraction
+  of `∫ exp(-‖x‖²/2) = (2π)^(n/2)` from `stdGaussianDensity_integral_one`, tail `rw [hstep,
+  smul_eq_mul, h1]; rw [hscal]` with Step-3's `hscal` scalar identity.
+* `isFiniteMeasure_gaussianPDF_withDensity (n) (mean : Fin n → ℝ) (S) (hS : S.PosDef) :
+  IsFiniteMeasure (volume.withDensity (fun x => ENNReal.ofReal (multivariateGaussianPDF n mean
+  S hS x)))` — Step 5 support. Takes the mean as a PLAIN `Fin n → ℝ` function (not
+  `EuclideanSpace`) so the main theorem can call it with `(A⁻¹).mulVec y` verbatim; internally
+  calls `integral_multivariateGaussianPDF_one` at `(WithLp.toLp 2 mean)` and bridges via a
+  pointwise `rfl` (`WithLp.ofLp (WithLp.toLp 2 m) ≡ m`). Mirrors the 2c recipe
+  (`Integrable.of_integral_ne_zero`, `ofReal_integral_eq_lintegral_ofReal`,
+  `isFiniteMeasure_withDensity`).
+* `multivariateGaussianPDF_eq (n) (m) (Cov) (hC : Cov.PosDef) (x)` — generic pointwise PDF
+  unfolding (rfl); parenthesisation: the exponent is `-(((Cov⁻¹ *ᵥ ((x : Fin n → ℝ) - m)) ⬝ᵥ
+  ((x : Fin n → ℝ) - m)) / 2)`, i.e. Neg(Div(dotProduct, 2)) — the dotProduct AND the mulVec each
+  carry their own parens, and the `/ 2` sits inside the negation parens.
+* `measurable_multivariateGaussianPDF (n) (m) (Cov) (hC) : Measurable (fun x => …)` —
+  `simp only [multivariateGaussianPDF_eq n m Cov hC]` under the binder, then `fun_prop`
+  (fun_prop cannot unfold `multivariateGaussianPDF` itself).
+* Main theorem `integral_norm_gaussian_bounded` — glue:
+  `hSig := sigmaTilde_posDef n S hS A hA`; `hposT` (PDF ≥ 0) via
+  `rw [multivariateGaussianPDF_eq …]` + `mul_nonneg`; `hmeasPT := (ENNReal.measurable_ofReal.comp
+  (measurable_multivariateGaussianPDF …)).aemeasurable`; `htopT : ∀ᵐ x, ENNReal.ofReal (pdf x) < ∞`
+  by `simp`; finiteness `hfin` from `isFiniteMeasure_gaussianPDF_withDensity`; measure identity
+  `hEq : volume.withDensity (ofReal ∘ pdf) = multivariateGaussian (A⁻¹·y) (A⁻¹ S A⁻ᵀ)` via
+  `Measure.ext_of_charFun` + `rw [multivariateGaussian_eq_withDensity n (WithLp.toLp 2 ((A⁻¹).mulVec
+  y)) (A⁻¹ * S * A⁻¹ᵀ) hSig t, charFun_multivariateGaussian hSig.posSemidef t]` (note: Step 3's
+  theorem takes `PosDef`, Mathlib's `charFun_multivariateGaussian` takes `PosSemidef`);
+  `hwithD : Integrable id (withDensity …) := by rw [hEq]; exact IsGaussian.integrable_id`
+  (`IsGaussian.toIsProbabilityMeasure` supplies the `IsFiniteMeasure` instance on the
+  `multivariateGaussian` side for `ext_of_charFun`); then
+  `(integrable_withDensity_iff_integrable_smul₀' hmeasPT htopT).mp hwithD` (the `.mp` with
+  `g := id` avoids the higher-order `rw` into the iff), `.norm`,
+  `hpt : ‖(ofReal pdf x).toReal • id x‖ = ‖x‖ * pdf x` via `rw [norm_smul,
+  ENNReal.toReal_ofReal (hposT x), Real.norm_eq_abs, abs_of_nonneg (hposT x), show ‖id x‖ = ‖x‖
+  from rfl, mul_comm]` (order matters: `toReal_ofReal` FIRST, since
+  `ENNReal.toReal_nonneg` is a Prop-application, not a function; `abs_of_nonneg (hposT x)`
+  then works on the real value directly), `hkey := hnormed.congr …`, and the final
+  `Integrable.congr` to the goal integrand via `hcongr1`, proved by `rw [mul_assoc, mul_comm
+  (pdf₀ …) (1 / Real.sqrt …), ← density_id n S hS A hA y hSig h]` (mul_assoc FORWARD — the goal
+  LHS is `(‖h‖ * pdf₀) * c`, left-associated, and `← mul_assoc` looks for `a * (b * c)`).
+
+Gotchas (Steps 4–5):
+
+* **Combining tilde is not a Lean identifier character**: `hpos̃`/`hmeasP̃` fail with
+  `error: expected token` at the identifier; use ASCII names (`hposT`, `hmeasPT`, `htopT`).
+* The `(x : EuclideanSpace ℝ (Fin n)) → Fin n → ℝ` cast is `WithLp.ofLp`, and
+  `WithLp.ofLp (WithLp.toLp 2 v) ≡ v` is rfl — so cast-mean and plain-mean PDF values agree
+  pointwise by `rfl` (`hcast`), and `withDensity` of them are defeq (`exact` suffices for
+  `IsFiniteMeasure`); for `rw`-matching use an explicit `congrArg volume.withDensity (funext …)`
+  bridge (`hEqL`) rather than relying on `kabstract` seeing through the cast.
+* Everything in the main theorem is stated with the PLAIN mean `((A⁻¹).mulVec (y : Fin n → ℝ))`
+  so `density_id` matches verbatim in the last `rw`.
+* `simp only [neg_div] at h0` in the `stdGaussianDensity_integral_one` extraction also rewrites
+  the exponent `-‖x‖²/2` → `-(‖x‖²/2)`, breaking later `rw [h1]`; instead target ONLY the rpow
+  exponent: `rw [show (-(↑n : ℝ)) / 2 = -((↑n : ℝ) / 2) from by ring] at h0`, then
+  `rw [Real.rpow_neg h2pi.le ((n : ℝ) / 2)] at h0`.
+* `charFun_multivariateGaussian`'s RHS `exp (⟪x, μ⟫ * I - x ⬝ᵥ S *ᵥ x / 2)` elaborates (under
+  `open Matrix` scoped notation, `⟪·,·⟫ = inner 𝕜 · ·`, and ℝ→ℂ coercion = `Complex.ofReal`)
+  to exactly the RHS form of `multivariateGaussian_eq_withDensity`, so the two-step `rw` closes
+  the `ext_of_charFun` goal outright — no bridge needed.

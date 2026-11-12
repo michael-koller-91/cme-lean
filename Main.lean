@@ -557,6 +557,149 @@ theorem multivariateGaussian_eq_withDensity (n : ℕ) (μ : EuclideanSpace ℝ (
     real_inner_comm t μ, hfin]
 
 
+/-- Step 4 of `plan_integral_norm_gaussian_bounded.md`: the multivariate Gaussian PDF with mean
+`μ` and positive definite covariance `S` integrates to `1` over `EuclideanSpace ℝ (Fin n)`
+(substitution `x ↦ μ + √Σ x` via `integral_subst`, reducing to the standard Gaussian integral
+`stdGaussianDensity_integral_one`). -/
+theorem integral_multivariateGaussianPDF_one (n : ℕ) (μ : EuclideanSpace ℝ (Fin n))
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) :
+    ∫ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x ∂volume = 1 := by
+  -- CFC bundle (same as in `multivariateGaussian_eq_withDensity`)
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hS0 : 0 ≤ S := Matrix.nonneg_iff_posSemidef.mpr hS.posSemidef
+  set B : Matrix (Fin n) (Fin n) ℝ := CFC.sqrt S with hBdef
+  have hBB : B * B = S := CFC.sqrt_mul_sqrt_self S hS0
+  have hBnn : 0 ≤ B := by rw [hBdef]; exact CFC.sqrt_nonneg S
+  have hBher : B.IsHermitian := (Matrix.nonneg_iff_posSemidef.mp hBnn).1
+  have hBdetSq : B.det ^ 2 = S.det := by rw [pow_two, ← Matrix.det_mul, hBB]
+  have hBdetNN : 0 ≤ B.det := (Matrix.nonneg_iff_posSemidef.mp hBnn).det_nonneg
+  have hBdetEq : B.det = Real.sqrt S.det :=
+    ((Real.sqrt_eq_iff_eq_sq (le_of_lt hSdetpos) hBdetNN).mpr hBdetSq.symm).symm
+  have hBdetpos : 0 < B.det := by rw [hBdetEq]; exact Real.sqrt_pos.mpr hSdetpos
+  have hquad' : ∀ h : EuclideanSpace ℝ (Fin n),
+      (S⁻¹ *ᵥ (B *ᵥ (h : Fin n → ℝ))) ⬝ᵥ (B *ᵥ (h : Fin n → ℝ)) = ‖h‖ ^ 2 := by
+    intro h; rw [← hBdef] at *; exact quadForm_sqrt_eq_norm_sq n S hS h
+  have hcoep : ∀ x : EuclideanSpace ℝ (Fin n),
+      ((μ + Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B x : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+        - (μ : Fin n → ℝ) = B *ᵥ (x : Fin n → ℝ) := by
+    intro x
+    rw [WithLp.ofLp_add, add_sub_cancel_left]
+    rfl
+  -- PDF facts
+  have hpdf : ∀ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x
+        = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+            ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)) :=
+    fun _ => rfl
+  have hP'0 : (2 * Real.pi) ^ ((n : ℝ) / 2) ≠ 0 := by positivity
+  have hSqrt0 : Real.sqrt S.det ≠ 0 := ne_of_gt (Real.sqrt_pos.mpr hSdetpos)
+  have hmeasRHS : Measurable (fun x : EuclideanSpace ℝ (Fin n) =>
+      ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+        * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+          ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2))) := by
+    fun_prop
+  have hf : AEMeasurable (fun x : EuclideanSpace ℝ (Fin n) =>
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x) volume :=
+    hmeasRHS.aemeasurable.congr (Filter.Eventually.of_forall (fun x => by simp only [hpdf]))
+  -- shifted PDF reduces to the standard Gaussian density
+  have hshift : ∀ y : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS
+        (μ + Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B y)
+        = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-‖y‖ ^ 2 / 2) := by
+    intro y
+    rw [hpdf, hcoep y, hquad' y, ← neg_div]
+  -- substitution + pointwise shift + constant extraction, in one step (defeq-chained,
+  -- no brittle `rw` matching of the substituted integrand)
+  have hsub := integral_subst n μ B hBdetpos
+    (fun x => multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x) hf
+  have hstep : ∫ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x ∂volume
+      = (B.det : ℝ) • (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+        * ∫ x : EuclideanSpace ℝ (Fin n), Real.exp (-‖x‖ ^ 2 / 2) ∂volume) := by
+    refine Eq.trans hsub (congrArg ((B.det : ℝ) • ·)
+      (Eq.trans (integral_congr_ae (Filter.Eventually.of_forall (fun y => hshift y)))
+        (integral_const_mul _
+          (fun x : EuclideanSpace ℝ (Fin n) => Real.exp (-‖x‖ ^ 2 / 2)))))
+  -- extract the standard Gaussian integral
+  have h2pi : 0 < 2 * Real.pi := by positivity
+  have hPne : (2 * Real.pi) ^ ((n : ℝ) / 2) ≠ 0 := by positivity
+  have h0 := stdGaussianDensity_integral_one (ι := Fin n)
+  simp only [Fintype.card_fin] at h0
+  rw [integral_const_mul] at h0
+  rw [show (-(↑n : ℝ)) / 2 = -((↑n : ℝ) / 2) from by ring] at h0
+  rw [Real.rpow_neg h2pi.le ((n : ℝ) / 2)] at h0
+  have h1 : ∫ x : EuclideanSpace ℝ (Fin n), Real.exp (-‖x‖ ^ 2 / 2) ∂volume
+      = (2 * Real.pi) ^ ((n : ℝ) / 2) := by
+    have h3 := congrArg (fun t : ℝ => (2 * Real.pi) ^ ((n : ℝ) / 2) * t) h0
+    rw [← mul_assoc, mul_inv_cancel₀ hPne, one_mul, mul_one] at h3
+    exact h3
+  have hscal : B.det * (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+      * (2 * Real.pi) ^ ((n : ℝ) / 2)) = 1 := by
+    rw [hBdetEq, mul_comm (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+      ((2 * Real.pi) ^ ((n : ℝ) / 2)), ← mul_assoc,
+      mul_comm (Real.sqrt S.det) ((2 * Real.pi) ^ ((n : ℝ) / 2)),
+      mul_inv_cancel₀ (mul_ne_zero hP'0 hSqrt0)]
+  rw [hstep, smul_eq_mul, h1]
+  rw [hscal]
+
+
+/-- Step 5 of `plan_integral_norm_gaussian_bounded.md`: `volume.withDensity` of
+`ENNReal.ofReal ∘ (multivariateGaussianPDF …)` is a finite measure (feeds
+`Measure.ext_of_charFun`; the `∫⁻ … ≠ ∞` side condition follows from the integral being `1`,
+via `ofReal_integral_eq_lintegral_ofReal`). -/
+theorem isFiniteMeasure_gaussianPDF_withDensity (n : ℕ) (mean : Fin n → ℝ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) :
+    IsFiniteMeasure (volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+      (multivariateGaussianPDF n mean S hS x))) := by
+  have hpdf : ∀ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (WithLp.toLp 2 mean : EuclideanSpace ℝ (Fin n)) S hS x
+        = multivariateGaussianPDF n mean S hS x := fun _ => rfl
+  have hint : ∫ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n mean S hS x ∂volume = 1 := by
+    have h1 := integral_multivariateGaussianPDF_one n (WithLp.toLp 2 mean) S hS
+    exact (integral_congr_ae (Filter.Eventually.of_forall
+      (fun x => (hpdf x).symm))).trans h1
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hpos : ∀ x : EuclideanSpace ℝ (Fin n),
+      0 ≤ multivariateGaussianPDF n mean S hS x := by
+    intro x
+    rw [show multivariateGaussianPDF n mean S hS x
+        = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - mean)) ⬝ᵥ
+            ((x : Fin n → ℝ) - mean)) / 2)) from rfl]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg (le_of_lt (by positivity))
+      (le_of_lt (Real.sqrt_pos.mpr hSdetpos)))) (le_of_lt (Real.exp_pos _))
+  have hfin : Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      multivariateGaussianPDF n mean S hS x) volume :=
+    Integrable.of_integral_ne_zero (by rw [hint]; norm_num)
+  have hlint : ∫⁻ x : EuclideanSpace ℝ (Fin n), ENNReal.ofReal
+      (multivariateGaussianPDF n mean S hS x) ∂volume = 1 := by
+    rw [← ofReal_integral_eq_lintegral_ofReal hfin
+      (Eventually.of_forall fun x => hpos x)]
+    rw [hint, ENNReal.ofReal_one]
+  exact isFiniteMeasure_withDensity (by rw [hlint]; simp)
+
+
+/-- Pointwise unfolding of `multivariateGaussianPDF` for a general mean and covariance. -/
+theorem multivariateGaussianPDF_eq (n : ℕ) (m : Fin n → ℝ) (Cov : Matrix (Fin n) (Fin n) ℝ)
+    (hC : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) :
+    multivariateGaussianPDF n m Cov hC x
+      = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt Cov.det)⁻¹
+        * Real.exp (-(((Cov⁻¹ *ᵥ ((x : Fin n → ℝ) - m)) ⬝ᵥ
+          ((x : Fin n → ℝ) - m)) / 2)) :=
+  rfl
+
+/-- Measurability of the multivariate Gaussian PDF. -/
+theorem measurable_multivariateGaussianPDF (n : ℕ) (m : Fin n → ℝ)
+    (Cov : Matrix (Fin n) (Fin n) ℝ) (hC : Cov.PosDef) :
+    Measurable (fun x : EuclideanSpace ℝ (Fin n) => multivariateGaussianPDF n m Cov hC x) := by
+  simp only [multivariateGaussianPDF_eq n m Cov hC]
+  fun_prop
+
+
 theorem integral_norm_gaussian_bounded
   (n : ℕ)
   (S : Matrix (Fin n) (Fin n) ℝ)
@@ -570,5 +713,87 @@ theorem integral_norm_gaussian_bounded
     * multivariateGaussianPDF n (0 : Fin n → ℝ) S hS (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
     * (1 / Real.sqrt ( (A⁻¹ * A⁻¹ᵀ).det ))) volume
   := by
-  sorry
+  have hSig : (A⁻¹ * S * A⁻¹ᵀ).PosDef := sigmaTilde_posDef n S hS A hA
+  -- PDF with mean `A⁻¹ y` and covariance `Σ̃ = A⁻¹ S A⁻ᵀ` (mean in plain form, matching
+  -- `density_id`'s RHS verbatim)
+  have hP' : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSigdetpos : 0 < (A⁻¹ * S * A⁻¹ᵀ).det := hSig.det_pos
+  have hposT : ∀ x : EuclideanSpace ℝ (Fin n),
+      0 ≤ multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x := by
+    intro x
+    rw [multivariateGaussianPDF_eq n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg (le_of_lt hP')
+      (le_of_lt (Real.sqrt_pos.mpr hSigdetpos)))) (le_of_lt (Real.exp_pos _))
+  have hmeasPT : AEMeasurable (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+      (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x)) volume :=
+    (ENNReal.measurable_ofReal.comp
+      (measurable_multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ))
+        (A⁻¹ * S * A⁻¹ᵀ) hSig)).aemeasurable
+  have htopT : ∀ᵐ x ∂volume,
+      ENNReal.ofReal (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ))
+        (A⁻¹ * S * A⁻¹ᵀ) hSig x) < ∞ := by simp
+  -- the cast mean (as produced by instantiating the EuclideanSpace-typed lemmas) agrees
+  -- pointwise with the plain `(A⁻¹).mulVec y` mean
+  have hcast : ∀ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n
+        ((WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+        (A⁻¹ * S * A⁻¹ᵀ) hSig x
+      = multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x :=
+    fun _ => rfl
+  -- the density measure is finite (feeds `Measure.ext_of_charFun`)
+  have hfin : IsFiniteMeasure (volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (multivariateGaussianPDF n
+        ((WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+        (A⁻¹ * S * A⁻¹ᵀ) hSig x))) :=
+    isFiniteMeasure_gaussianPDF_withDensity n
+      ((WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+      (A⁻¹ * S * A⁻¹ᵀ) hSig
+  -- the density measure is the multivariate Gaussian measure
+  have hEqL : volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+      (multivariateGaussianPDF n
+        ((WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+        (A⁻¹ * S * A⁻¹ᵀ) hSig x))
+      = volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+      (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x)) :=
+    congrArg volume.withDensity (funext fun x => congrArg ENNReal.ofReal (hcast x))
+  have hEq : volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+      (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig x))
+      = multivariateGaussian (WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ))) (A⁻¹ * S * A⁻¹ᵀ) := by
+    refine hEqL.symm.trans ?_
+    refine Measure.ext_of_charFun (funext fun t => ?_)
+    rw [multivariateGaussian_eq_withDensity n
+      (WithLp.toLp 2 ((A⁻¹).mulVec (y : Fin n → ℝ))) (A⁻¹ * S * A⁻¹ᵀ) hSig t,
+      charFun_multivariateGaussian hSig.posSemidef t]
+  -- withDensity bridge: identity is integrable w.r.t. the density measure
+  have hwithD : MeasureTheory.Integrable id (volume.withDensity (fun x : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ))
+        (A⁻¹ * S * A⁻¹ᵀ) hSig x))) := by
+    rw [hEq]
+    exact ProbabilityTheory.IsGaussian.integrable_id
+  have hbridge := (integrable_withDensity_iff_integrable_smul₀' hmeasPT htopT).mp hwithD
+  have hnormed := hbridge.norm
+  -- pointwise: ‖toReal ofReal pdf • x‖ = ‖x‖ * pdf
+  have hpt : ∀ x : EuclideanSpace ℝ (Fin n),
+      ‖(ENNReal.ofReal (multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ))
+          (A⁻¹ * S * A⁻¹ᵀ) hSig x)).toReal • id x‖
+        = ‖x‖ * multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ))
+          (A⁻¹ * S * A⁻¹ᵀ) hSig x := by
+    intro x
+    rw [norm_smul, ENNReal.toReal_ofReal (hposT x), Real.norm_eq_abs,
+      abs_of_nonneg (hposT x), show ‖id x‖ = ‖x‖ from rfl, mul_comm]
+  have hkey := hnormed.congr (Filter.Eventually.of_forall hpt)
+  -- bridge to the goal integrand via `density_id`
+  have hcongr1 : ∀ h : EuclideanSpace ℝ (Fin n),
+      ‖h‖
+      * multivariateGaussianPDF n (0 : Fin n → ℝ) S hS (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+      * (1 / Real.sqrt ((A⁻¹ * A⁻¹ᵀ).det))
+      = ‖h‖ * multivariateGaussianPDF n ((A⁻¹).mulVec (y : Fin n → ℝ)) (A⁻¹ * S * A⁻¹ᵀ) hSig h := by
+    intro h
+    rw [mul_assoc,
+      mul_comm (multivariateGaussianPDF n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))))
+        (1 / Real.sqrt ((A⁻¹ * A⁻¹ᵀ).det)),
+      ← density_id n S hS A hA y hSig h]
+  exact hkey.congr (Filter.Eventually.of_forall (fun h => (hcongr1 h).symm))
+
 
