@@ -700,7 +700,7 @@ theorem measurable_multivariateGaussianPDF (n : ℕ) (m : Fin n → ℝ)
   fun_prop
 
 
-theorem integral_norm_gaussian_bounded
+theorem integral_normalized_gaussian_bounded
   (n : ℕ)
   (S : Matrix (Fin n) (Fin n) ℝ)
   (hS : S.PosDef)
@@ -796,4 +796,27 @@ theorem integral_norm_gaussian_bounded
       ← density_id n S hS A hA y hSig h]
   exact hkey.congr (Filter.Eventually.of_forall (fun h => (hcongr1 h).symm))
 
+theorem integral_gaussian_bounded
+  (n : ℕ)
+  (S : Matrix (Fin n) (Fin n) ℝ)
+  (hS : S.PosDef)
+  (A : Matrix (Fin n) (Fin n) ℝ)
+  (hA : IsUnit A.det)
+  (y : EuclideanSpace ℝ (Fin n))
+  :
+  MeasureTheory.Integrable (fun (h : EuclideanSpace ℝ (Fin n)) =>
+    ‖h‖
+    * multivariateGaussianPDF n (0 : Fin n → ℝ) S hS (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))) volume
+  := by
+  have hAdet2 : ((A⁻¹ * A⁻¹ᵀ).det) = ((A⁻¹).det) ^ 2 := by
+    rw [Matrix.det_mul, Matrix.det_transpose, ← pow_two ((A⁻¹).det)]
+  have hAdetinv : (A⁻¹).det = (A.det)⁻¹ := by rw [Matrix.det_nonsing_inv]; norm_num
+  have hne : Real.sqrt ((A⁻¹ * A⁻¹ᵀ).det) ≠ 0 := by
+    rw [hAdet2, Real.sqrt_sq_eq_abs, ne_eq, abs_eq_zero, hAdetinv, inv_eq_zero]
+    exact isUnit_iff_ne_zero.mp hA
+  have hnorm := integral_normalized_gaussian_bounded n S hS A hA y
+  have h1 := hnorm.smul (Real.sqrt ((A⁻¹ * A⁻¹ᵀ).det))
+  refine h1.congr (Filter.Eventually.of_forall (fun h => ?_))
+  simp only [Pi.smul_apply, smul_eq_mul]
+  field_simp
 
