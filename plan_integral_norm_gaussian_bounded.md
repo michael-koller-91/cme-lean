@@ -103,7 +103,7 @@ declarations still have `sorry` warnings, and `#print axioms <lemma>` confirms a
 compiles; success means no errors (warnings such as unused variables are fine). If a step fails,
 isolate it as a private lemma first and debug it separately.
 
-## Status (updated 2026-11-10)
+## Status (updated 2026-11-12)
 
 **Step 1 is DONE (proved in `Main.lean`, verified with `lake env lean Main.lean`).**
 
@@ -145,9 +145,8 @@ Key gotchas discovered (important for future steps):
    `((Σ̃)⁻¹ *ᵥ (h - A⁻¹·y)) ⬝ᵥ (h - A⁻¹·y)` — exactly `quadForm_eq u w` with `u := h, w := y`.
 5. `WithLp.ofLp_toLp` is not needed in the tail simp (the coercion resolves before).
 
-**Remaining:** Step 2 (`stdGaussian_eq_withDensity`, generalized over finite `ι`),
-Step 3 (`multivariateGaussian_eq_withDensity`, generalized), Steps 4–5 inline glue;
-the theorem `integral_norm_gaussian_bounded` still has `sorry`.
+(Superseded — Steps 2 and 3 are done; see the sub-step sections below and the final
+**Remaining** at the end of this Status section.)
 
 ### Sub-step 2a — DONE (proved in `Main.lean`)
 
@@ -179,11 +178,7 @@ main goal closes); `finrank_euclideanSpace` is a simp lemma equal to `Fintype.ca
 `ring` proves `(π : ℝ)/(1/2) = 2 * π` and the exponent reshuffle (`congr 1; ring`);
 `inv_mul_cancel₀` (not `mul_inv_cancel₀`) since the inverse is on the LEFT.
 
-**Remaining in Step 2:** 2b — `charFun (volume.withDensity (fun x => (2π)^(-(card ι : ℝ)/2) *
-Real.exp (-‖x‖²/2))) t = exp(-‖t‖²/2)`; reduce via `charFun_apply` (`charFun μ t =
-∫ x, exp (⟪x, t⟫ * I) ∂μ`) to `GaussianFourier.integral_cexp_neg_mul_sq_norm_add` with
-`b = 1/2` and `c = ±I`; then 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
-(needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).
+(Superseded — 2b and 2c are done; see below.)
 
 ### Sub-step 2b — DONE (proved in `Main.lean`)
 
@@ -238,8 +233,7 @@ since `Complex` is not opened there):
    `-(card : ℝ) / 2` elaborates as `(-card)/2` while `rpow_neg` needs `x ^ (-(y))`; pass explicit
    args to `Real.rpow_neg`/`Complex.ofReal_cpow` (else `0 ≤ x` surfaces as an rw side goal).
 
-**Remaining in Step 2:** 2c — `Measure.ext_of_charFun` + `charFun_stdGaussian`
-(needs `IsFiniteMeasure` instances on both sides: use 2a for the density measure).
+(Superseded — 2c is done; see below.)
 
 ### Sub-step 2c — DONE (proved in `Main.lean`)
 
@@ -268,5 +262,91 @@ since `Complex` is not opened there):
    (`CompleteSpace`, `BorelSpace`, `SecondCountableTopology`, `IsFiniteMeasure` on both
    sides) are all available for `EuclideanSpace ℝ ι` automatically.
 
-**Remaining:** Step 3 (`multivariateGaussian_eq_withDensity`, generalized over finite `ι`),
-Steps 4–5 inline glue; the theorem `integral_norm_gaussian_bounded` still has `sorry`.
+### Sub-step 3 — DONE (proved in `Main.lean`)
+
+Theorems proved in `Main.lean` (kept at `Fin n`; `multivariateGaussianPDF` stays at `Fin n`):
+
+* `integral_subst {F} (n) (μ) (B) (hBdet : 0 < B.det) (f) (hf : AEMeasurable f volume) :
+  ∫ x, f x ∂volume = (B.det : ℝ) • ∫ x, f (μ + toEuclideanLin B x) ∂volume` — via
+  `Measure.map_linearMap_addHaar_eq_smul_addHaar` + `Matrix.toEuclideanLin_eq_toLin_orthonormal`
+  + `LinearMap.det_toLin`; translation by `(μ + ·) ∘ L` then `← Measure.map_map`,
+  `Measure.map_smul`, `MeasureTheory.map_add_left_eq_self volume μ`; transport of
+  measurability via `Measure.smul_absolutelyContinuous` + `hf.mono_ac hac |>.aestronglyMeasurable`;
+  tail `integral_map` (FIRST arg = measurability of the map!), `integral_smul_measure`,
+  `ENNReal.toReal_ofReal`.
+* `quadForm_sqrt_eq_norm_sq (n) (S) (hS : S.PosDef) : ∀ h : EuclideanSpace ℝ (Fin n),
+  (S⁻¹ *ᵥ (CFC.sqrt S *ᵥ (h : Fin n → ℝ))) ⬝ᵥ (CFC.sqrt S *ᵥ (h : Fin n → ℝ)) = ‖h‖ ^ 2` —
+  via `Matrix.inv_eq_left_inv` of `(S⁻¹ * B) * B = 1` (so `B⁻¹ = S⁻¹ * B`),
+  `Matrix.dotProduct_transpose_mulVec`, `hBT : Bᵀ = B` (from
+  `Matrix.conjTranspose_eq_transpose_of_trivial` + `B.IsHermitian`),
+  `Matrix.mul_nonsing_inv`, `Matrix.one_mulVec`, `EuclideanSpace.inner_toLp_toLp`,
+  `real_inner_self_eq_norm_sq`.
+* `stdGaussianDensity_ft {ι} [Fintype ι] (w : EuclideanSpace ℝ ι) : ∫ x : EuclideanSpace ℝ ι,
+  Complex.ofReal (Real.exp (-‖x‖ ^ 2 / 2)) * Complex.exp (Complex.ofReal (inner ℝ x w) * Complex.I)
+  = ((2 * Real.pi) ^ ((Fintype.card ι : ℝ) / 2) : ℝ) * Complex.exp (-‖w‖ ^ 2 / 2)` —
+  general-frequency version of 2b's core, via `GaussianFourier.integral_cexp_neg_mul_sq_norm_add`
+  (pointwise `hint` rewrites the integrand into its normal form: `Complex.exp (-(ofReal (1/2)) * ofReal ‖x‖^2 + I * ofReal (inner ℝ w x))`,
+  using `real_inner_comm w x`), then coercion surgery
+  (`← Complex.ofReal_div`, `show (π / (1/2 : ℝ)) = 2 * Real.pi`,
+  `← Complex.ofReal_cpow`, `Complex.I_sq`, `neg_one_mul`).
+* `multivariateGaussian_eq_withDensity (n) (μ) (S) (hS : S.PosDef) (t) :
+  charFun (volume.withDensity (fun x => ENNReal.ofReal
+  (multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x))) t
+  = Complex.exp (Complex.ofReal (inner ℝ t μ) * Complex.I
+    - Complex.ofReal ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ)) / 2)` — exactly the RHS of
+  Mathlib's `charFun_multivariateGaussian (hS : S.PosSemidef)`, so Steps 4–5 glue via
+  `Measure.ext_of_charFun` (finiteness on the Mathlib side is free from
+  `IsGaussian.toIsProbabilityMeasure`).
+
+**Step 3 proof recipe:**
+1. CFC bundle: `set B := CFC.sqrt S with hBdef`; `hBB : B * B = S` (`CFC.sqrt_mul_sqrt_self S (Matrix.nonneg_iff_posSemidef.mpr hS.posSemidef)`); `hBnn`, `hBher`, `hBdetEq : B.det = √S.det` (`Real.sqrt_eq_iff_eq_sq`), `hBdet`/`hSdet : IsUnit …`, `hBT : Bᵀ = B`.
+2. Bridges: `hcoep : (μ + L x).ofLp - μ.ofLp = B *ᵥ x.ofLp` (`WithLp.ofLp_add`, `add_sub_cancel_left`, rfl); `hinner` (`Matrix.inner_toEuclideanCLM`); `hcoLt` (rfl); `hbridge : inner (L x) t = inner x (L t)` (`real_inner_comm`, `hinner`, `← Matrix.dotProduct_transpose_mulVec`, `hBT`).
+3. PDF facts: `hpdf : ∀ x, multivariateGaussianPDF n μ.ofLp S hS x = RHS x := fun _ => rfl`;
+   `hpos` (positivity); `hpoint : (ofReal (pdf x)).toReal • cexp (…) = ofReal (const⁻¹) * (ofReal (rexp (…)) * cexp (…))`
+   (`ENNReal.toReal_ofReal`, `Complex.real_smul`, `Complex.ofReal_mul`, `mul_assoc`);
+   `hmeasP` (see gotcha below); `htop : ∀ᵐ x, ofReal (pdf x) < ∞ := by simp`.
+4. `hnorm2 : ‖toEuclideanLin B t‖ ^ 2 = (t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ)` —
+   `rw [← real_inner_self_eq_norm_sq, hinner …, hcoLt, ← Matrix.dotProduct_transpose_mulVec, hBT, Matrix.mulVec_mulVec, hBB]`.
+5. `hstep2` (the key trick): ONE `have` stating `∫ x, (unsubstituted integrand) ∂volume
+   = (B.det : ℝ) • ((const * cexp (inner μ t * I)) * ∫ x, (standard-Gaussian integrand with w = L t) ∂volume)`,
+   proved by `refine Eq.trans hsub (congrArg ((B.det : ℝ) • ·) (Eq.trans (integral_congr_ae
+   (Filter.Eventually.of_forall (fun y => hsplit y))) (integral_const_mul _ (fun x => …))))`
+   where `hsub := integral_subst n μ B hBdetpos (fun x => …) (by fun_prop)` —
+   `Eq.trans`/`congrArg` use elaborator defeq, avoiding brittle `rw` matching of the
+   beta-redexed substituted integrand (see gotchas).
+6. Endgame: `rw [charFun_apply]`,
+   `rw [integral_withDensity_eq_integral_toReal_smul₀ hmeasP htop]`,
+   `simp only [hpoint]`,
+   `rw [hstep2, Complex.real_smul, stdGaussianDensity_ft (toEuclideanLin B t)]`,
+   `simp only [Fintype.card_fin]`,
+   `rw [← Complex.ofReal_pow, ← Complex.ofReal_neg, hnorm2, hrearr, hscalC, one_mul, real_inner_comm t μ, hfin]`
+   (`hrearr`/`hscalC`/`hfin` are `ring`/identity side conditions stated as `have`s).
+
+Step-3 gotchas (verified by compile):
+* `Matrix.mulVec_mulVec (v) (M) (N) : M *ᵥ N *ᵥ v = (M * N) *ᵥ v` — vector argument is
+  FIRST in the signature but the statement is `M *ᵥ (N *ᵥ v) = (M * N) *ᵥ v`; use
+  unexplicit `rw [Matrix.mulVec_mulVec]` (matches `B *ᵥ (B *ᵥ t)` uniquely).
+* `real_inner_comm t μ` — argument order matters: this rewrites `inner ℝ μ t → inner ℝ t μ`
+  (matching the goal-LHS form); with `(μ t)` it instead rewrote the theorem-RHS side and broke `hfin`.
+* AEMeasurable of the PDF: `fun_prop` cannot unfold `multivariateGaussianPDF` ("No theorems
+  found for multivariateGaussianPDF"). Instead: prove `Measurable` of the explicit RHS lambda
+  by `fun_prop` (`hinner_meas`), compose `(ENNReal.measurable_ofReal.comp hinner_meas).aemeasurable`
+  (annotate the `AEMeasurable … volume` type so the implicit measure is fixed), then transport
+  to the PDF form with `AEMeasurable.congr (Filter.Eventually.of_forall (fun x => by simp only [hpdf]))`
+  — plain `rw [hpdf x]` FAILS inside the congr goal because it is not beta-reduced; `simp only` is.
+* `integral_congr` for Bochner integrals is `integral_congr_ae` (needs `=ᵐ[μ]`; obtain from
+  pointwise via `Filter.Eventually.of_forall`).
+* The substituted integral in `integral_subst`'s RHS is a beta-redex
+  `f (μ + L x)` (`f` a lambda) — `rw [hsplit]` (or any rewrite whose pattern spells the
+  substituted body) FAILS against it even though everything displays identically;
+  chain with `Eq.trans`/`congrArg` instead.
+* `Fintype.card (Fin n) = n` is NOT rfl: `simp only [Fintype.card_fin]` after
+  `rw [stdGaussianDensity_ft …]`.
+* `Main.lean` needs `open scoped Matrix MatrixOrder` (`0 ≤ S`, `PosSemidef` order on matrices)
+  and `open scoped ENNReal` (`∞` notation) for the Step-3 block.
+* `set B := CFC.sqrt S with hBdef` then state helpers against `B`; `exact hquad n S hS h`
+  closes the `B`-form goal by defeq (the `rw [← hBdef] at *` in the prototype is a no-op).
+
+**Remaining:** Steps 4–5 inline glue (`integrable_withDensity_iff_integrable_smul₀'` +
+`IsGaussian.integrable_id` + `Integrable.norm` via `Measure.ext_of_charFun`); the theorem
+`integral_norm_gaussian_bounded` still has `sorry`.

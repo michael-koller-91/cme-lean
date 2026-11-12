@@ -8,7 +8,7 @@ import Mathlib.Analysis.SpecialFunctions.Gaussian.FourierTransform
 import Mathlib.MeasureTheory.Function.Jacobian
 
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
-open scoped Matrix
+open scoped Matrix MatrixOrder ENNReal
 
 noncomputable def multivariateGaussianPDF (n : ℕ) (mean : Fin n → ℝ) (Cov : Matrix (Fin n) (Fin n) ℝ) (_ : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) : ℝ :=
   let d := x - mean
@@ -256,6 +256,307 @@ theorem stdGaussian_eq_withDensity
   refine Measure.ext_of_charFun (funext fun t => ?_)
   rw [charFun_stdGaussian, charFun_stdGaussianDensity]
 
+
+/-- Linear change of variables for integrals over `EuclideanSpace ℝ (Fin n)`: for a matrix
+`B` with positive determinant, pulling the integrand back along `x ↦ μ + B x` scales the
+integral by `B.det` (Step 3 of `plan_integral_norm_gaussian_bounded.md`: the substitution
+`x ↦ μ + √Σ x` in the Fourier integral of the Gaussian density). -/
+theorem integral_subst {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F] [NormedSpace ℝ F]
+    [CompleteSpace F] [OpensMeasurableSpace F] [TopologicalSpace.PseudoMetrizableSpace F]
+    [SecondCountableTopology F]
+    (n : ℕ) (μ : EuclideanSpace ℝ (Fin n)) (B : Matrix (Fin n) (Fin n) ℝ) (hBdet : 0 < B.det)
+    (f : EuclideanSpace ℝ (Fin n) → F) (hf : AEMeasurable f volume) :
+    ∫ x, f x ∂volume
+      = (B.det : ℝ) • ∫ x, f (μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) ∂volume := by
+  have hLdet : LinearMap.det (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) = B.det := by
+    rw [Matrix.toEuclideanLin_eq_toLin_orthonormal, LinearMap.det_toLin]
+  have hLne : LinearMap.det (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) ≠ 0 := by
+    rw [hLdet]; exact ne_of_gt hBdet
+  have hmapL : Measure.map (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) volume
+      = ENNReal.ofReal (B.det)⁻¹ • volume := by
+    rw [Measure.map_linearMap_addHaar_eq_smul_addHaar volume hLne, hLdet, abs_of_pos (inv_pos.mpr hBdet)]
+  have hmeasg : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+      μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x := by fun_prop
+  have hmapg : Measure.map (fun x : EuclideanSpace ℝ (Fin n) =>
+      μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) volume
+      = ENNReal.ofReal (B.det)⁻¹ • volume := by
+    rw [show (fun x : EuclideanSpace ℝ (Fin n) =>
+        μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x)
+      = (μ + ·) ∘ (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) from rfl,
+      ← Measure.map_map (by fun_prop : Measurable (μ + ·))
+        (by fun_prop : Measurable (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B)),
+      hmapL, Measure.map_smul _ (by fun_prop), MeasureTheory.map_add_left_eq_self volume μ]
+  have hac : Measure.map (fun x : EuclideanSpace ℝ (Fin n) =>
+      μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) volume ≪ volume := by
+    rw [hmapg]; exact Measure.smul_absolutelyContinuous
+  have hf' : AEStronglyMeasurable f (Measure.map (fun x : EuclideanSpace ℝ (Fin n) =>
+      μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) volume) :=
+    (hf.mono_ac hac).aestronglyMeasurable
+  have H : ∫ x, f (μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) ∂volume
+      = (B.det)⁻¹ • ∫ x, f x ∂volume := by
+    calc ∫ x, f (μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) ∂volume
+        = ∫ y, f y ∂(Measure.map (fun x : EuclideanSpace ℝ (Fin n) =>
+            μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) volume) :=
+          (integral_map (hmeasg.aemeasurable) hf').symm
+      _ = ∫ y, f y ∂(ENNReal.ofReal (B.det)⁻¹ • volume) := by rw [hmapg]
+      _ = (ENNReal.ofReal (B.det)⁻¹).toReal • ∫ y, f y ∂volume := integral_smul_measure _ _
+      _ = (B.det)⁻¹ • ∫ y, f y ∂volume := by
+          rw [ENNReal.toReal_ofReal (by positivity)]
+  rw [H, smul_smul, mul_inv_cancel₀ (ne_of_gt hBdet), one_smul]
+
+
+/-- The quadratic form of `√Σ`: with `B = CFC.sqrt S` the positive square root of a positive
+definite matrix `S`, the quadratic form of the transformed variable `h ↦ B h` collapses to
+`‖h‖²` (Step 3: reduction of the Gaussian integral to the standard Gaussian integral). -/
+theorem quadForm_sqrt_eq_norm_sq (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) :
+    ∀ h : EuclideanSpace ℝ (Fin n),
+      (S⁻¹ *ᵥ (CFC.sqrt S *ᵥ (h : Fin n → ℝ))) ⬝ᵥ (CFC.sqrt S *ᵥ (h : Fin n → ℝ)) = ‖h‖ ^ 2 := by
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hS0 : 0 ≤ S := Matrix.nonneg_iff_posSemidef.mpr hS.posSemidef
+  set B : Matrix (Fin n) (Fin n) ℝ := CFC.sqrt S with hBdef
+  have hBB : B * B = S := CFC.sqrt_mul_sqrt_self S hS0
+  have hBnn : 0 ≤ B := by rw [hBdef]; exact CFC.sqrt_nonneg S
+  have hBher : B.IsHermitian := (Matrix.nonneg_iff_posSemidef.mp hBnn).1
+  have hBdetSq : B.det ^ 2 = S.det := by rw [pow_two, ← Matrix.det_mul, hBB]
+  have hBdetNN : 0 ≤ B.det := (Matrix.nonneg_iff_posSemidef.mp hBnn).det_nonneg
+  have hBdetEq : B.det = Real.sqrt S.det :=
+    ((Real.sqrt_eq_iff_eq_sq (le_of_lt hSdetpos) hBdetNN).mpr hBdetSq.symm).symm
+  have hBdet : IsUnit B.det :=
+    isUnit_iff_ne_zero.mpr (by rw [hBdetEq]; exact ne_of_gt (Real.sqrt_pos.mpr hSdetpos))
+  have hSdet : IsUnit S.det := isUnit_iff_ne_zero.mpr (ne_of_gt hSdetpos)
+  have hBT : Bᵀ = B := by
+    rw [← Matrix.conjTranspose_eq_transpose_of_trivial]; exact hBher
+  have h1eq : (S⁻¹ * B) * B = (1 : Matrix (Fin n) (Fin n) ℝ) := by
+    rw [Matrix.mul_assoc, hBB, Matrix.nonsing_inv_mul S hSdet]
+  have h1 : B⁻¹ = S⁻¹ * B := Matrix.inv_eq_left_inv h1eq
+  intro h
+  set h' : Fin n → ℝ := (h : Fin n → ℝ) with hh'
+  calc (S⁻¹ *ᵥ (B *ᵥ h')) ⬝ᵥ (B *ᵥ h')
+      = ((S⁻¹ * B) *ᵥ h') ⬝ᵥ (B *ᵥ h') := by rw [Matrix.mulVec_mulVec]
+    _ = (B⁻¹ *ᵥ h') ⬝ᵥ (B *ᵥ h') := by rw [h1]
+    _ = h' ⬝ᵥ (Bᵀ *ᵥ (B⁻¹ *ᵥ h')) :=
+        (Matrix.dotProduct_transpose_mulVec B h' (B⁻¹ *ᵥ h')).symm
+    _ = h' ⬝ᵥ ((B * B⁻¹) *ᵥ h') := by rw [hBT, Matrix.mulVec_mulVec]
+    _ = h' ⬝ᵥ ((1 : Matrix (Fin n) (Fin n) ℝ) *ᵥ h') := by rw [Matrix.mul_nonsing_inv B hBdet]
+    _ = h' ⬝ᵥ h' := by rw [Matrix.one_mulVec]
+    _ = ‖h‖ ^ 2 := by
+        calc h' ⬝ᵥ h' = h' ⬝ᵥ star h' := by
+              rw [show star h' = h' from by simp]
+          _ = inner ℝ (WithLp.toLp 2 h') (WithLp.toLp 2 h') :=
+              (EuclideanSpace.inner_toLp_toLp h' h').symm
+          _ = ‖WithLp.toLp 2 h'‖ ^ 2 := real_inner_self_eq_norm_sq _
+          _ = ‖h‖ ^ 2 := rfl
+
+
+/-- Core: Fourier transform of the standard Gaussian density at general frequency `w`. -/
+theorem stdGaussianDensity_ft {ι : Type*} [Fintype ι] (w : EuclideanSpace ℝ ι) :
+    ∫ x : EuclideanSpace ℝ ι,
+      Complex.ofReal (Real.exp (-‖x‖ ^ 2 / 2))
+        * Complex.exp (Complex.ofReal (inner ℝ x w) * Complex.I)
+    = ((2 * Real.pi) ^ ((Fintype.card ι : ℝ) / 2) : ℝ) * Complex.exp (-‖w‖ ^ 2 / 2) := by
+  have hb : 0 < ((1 / 2 : ℝ) : ℂ).re := by norm_num
+  have h2pi : 0 < 2 * Real.pi := by positivity
+  have hexp : ∀ x : EuclideanSpace ℝ ι,
+      Real.exp (-‖x‖ ^ 2 / 2) = Real.exp (-(1 / 2) * ‖x‖ ^ 2) :=
+    fun x => by congr 1; ring
+  have hint : ∀ x : EuclideanSpace ℝ ι,
+      Complex.ofReal (Real.exp (-(1 / 2) * ‖x‖ ^ 2))
+        * Complex.exp (Complex.ofReal (inner ℝ x w) * Complex.I)
+      = Complex.exp (-(Complex.ofReal (1 / 2)) * Complex.ofReal ‖x‖ ^ 2
+          + Complex.I * Complex.ofReal (inner ℝ w x)) := by
+    intro x
+    rw [Complex.ofReal_exp, ← Complex.exp_add, Complex.ofReal_mul, Complex.ofReal_pow,
+      Complex.ofReal_neg, real_inner_comm w x, mul_comm (Complex.ofReal (inner ℝ w x)) Complex.I]
+  simp only [hexp, hint]
+  rw [GaussianFourier.integral_cexp_neg_mul_sq_norm_add hb Complex.I w,
+    finrank_euclideanSpace,
+    ← Complex.ofReal_div,
+    show (Real.pi / (1 / 2 : ℝ)) = 2 * Real.pi from by ring,
+    show (((Fintype.card ι : ℕ) : ℂ) / (2 : ℂ)) = Complex.ofReal ((Fintype.card ι : ℝ) / 2) from by push_cast; rfl,
+    ← Complex.ofReal_cpow h2pi.le ((Fintype.card ι : ℝ) / 2),
+    Complex.I_sq, neg_one_mul,
+    show ((4 : ℂ) * ((1 / 2 : ℝ) : ℂ)) = 2 from by norm_num]
+
+
+/-- Step 3 of `plan_integral_norm_gaussian_bounded.md` (Fourier characterization): the
+characteristic function of the Gaussian measure with mean `μ` and positive definite
+covariance `S`, realized as `volume.withDensity` of the Gaussian PDF
+`multivariateGaussianPDF`, is `exp(i⟨t, μ⟩ - ⟨t, S t⟩ / 2)`, matching the characteristic
+function of Mathlib's `multivariateGaussian μ S` (via `charFun_multivariateGaussian`).
+The proof substitutes `x ↦ μ + √Σ x` (`integral_subst`), splits the pointwise integrand
+(`hsplit`), extracts the constant factors, and evaluates the remaining standard Gaussian
+Fourier integral (`stdGaussianDensity_ft`). -/
+theorem multivariateGaussian_eq_withDensity (n : ℕ) (μ : EuclideanSpace ℝ (Fin n))
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) (t : EuclideanSpace ℝ (Fin n)) :
+    charFun (volume.withDensity (fun x => ENNReal.ofReal
+      (multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x))) t
+      = Complex.exp (Complex.ofReal (inner ℝ t μ) * Complex.I
+          - Complex.ofReal ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ)) / 2) := by
+  -- CFC bundle
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hS0 : 0 ≤ S := Matrix.nonneg_iff_posSemidef.mpr hS.posSemidef
+  set B : Matrix (Fin n) (Fin n) ℝ := CFC.sqrt S with hBdef
+  have hBB : B * B = S := CFC.sqrt_mul_sqrt_self S hS0
+  have hBnn : 0 ≤ B := by rw [hBdef]; exact CFC.sqrt_nonneg S
+  have hBher : B.IsHermitian := (Matrix.nonneg_iff_posSemidef.mp hBnn).1
+  have hBdetSq : B.det ^ 2 = S.det := by rw [pow_two, ← Matrix.det_mul, hBB]
+  have hBdetNN : 0 ≤ B.det := (Matrix.nonneg_iff_posSemidef.mp hBnn).det_nonneg
+  have hBdetEq : B.det = Real.sqrt S.det :=
+    ((Real.sqrt_eq_iff_eq_sq (le_of_lt hSdetpos) hBdetNN).mpr hBdetSq.symm).symm
+  have hBdetpos : 0 < B.det := by rw [hBdetEq]; exact Real.sqrt_pos.mpr hSdetpos
+  have hBdet : IsUnit B.det := isUnit_iff_ne_zero.mpr (ne_of_gt hBdetpos)
+  have hSdet : IsUnit S.det := isUnit_iff_ne_zero.mpr (ne_of_gt hSdetpos)
+  have hBT : Bᵀ = B := by
+    rw [← Matrix.conjTranspose_eq_transpose_of_trivial]; exact hBher
+  have hquad' : ∀ h : EuclideanSpace ℝ (Fin n),
+      (S⁻¹ *ᵥ (B *ᵥ (h : Fin n → ℝ))) ⬝ᵥ (B *ᵥ (h : Fin n → ℝ)) = ‖h‖ ^ 2 := by
+    intro h; rw [← hBdef] at *; exact quadForm_sqrt_eq_norm_sq n S hS h
+  -- bridges
+  have hcoep : ∀ x : EuclideanSpace ℝ (Fin n),
+      ((μ + Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B x : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)
+        - (μ : Fin n → ℝ) = B *ᵥ (x : Fin n → ℝ) := by
+    intro x
+    rw [WithLp.ofLp_add, add_sub_cancel_left]
+    rfl
+  have hinner : ∀ (x y : EuclideanSpace ℝ (Fin n)),
+      inner ℝ x (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B y) = x ⬝ᵥ B *ᵥ (y : Fin n → ℝ) :=
+    fun x y => Matrix.inner_toEuclideanCLM B x y
+  have hcoLt :
+      (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B t : Fin n → ℝ) = B *ᵥ (t : Fin n → ℝ) := rfl
+  have hbridge : ∀ x : EuclideanSpace ℝ (Fin n),
+      inner ℝ (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B x) t
+        = inner ℝ x (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B t) := by
+    intro x
+    rw [real_inner_comm, hinner t x, ← Matrix.dotProduct_transpose_mulVec, hBT, ← hinner]
+  -- PDF facts
+  have hpdf : ∀ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x
+        = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+            ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)) :=
+    fun _ => rfl
+  have hP' : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hP'0 : (2 * Real.pi) ^ ((n : ℝ) / 2) ≠ 0 := by positivity
+  have hSqrt0 : Real.sqrt S.det ≠ 0 := ne_of_gt (Real.sqrt_pos.mpr hSdetpos)
+  have hpos : ∀ x : EuclideanSpace ℝ (Fin n),
+      0 ≤ multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x := by
+    intro x
+    rw [hpdf x]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg (le_of_lt hP')
+      (le_of_lt (Real.sqrt_pos.mpr hSdetpos)))) (le_of_lt (Real.exp_pos _))
+  have hpoint : ∀ x : EuclideanSpace ℝ (Fin n),
+      (ENNReal.ofReal (multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x)).toReal
+        • Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)
+      = Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+        * (Complex.ofReal (Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+          ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)))
+          * Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)) := by
+    intro x
+    rw [ENNReal.toReal_ofReal (hpos x), hpdf x, Complex.real_smul, Complex.ofReal_mul, mul_assoc]
+  have hmeasP : AEMeasurable (fun x => ENNReal.ofReal
+      (multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x)) volume := by
+    have hinner_meas : Measurable (fun x : EuclideanSpace ℝ (Fin n) =>
+        ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+            ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2))) := by
+      fun_prop
+    have hRHS : AEMeasurable (fun x : EuclideanSpace ℝ (Fin n) => ENNReal.ofReal
+        (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+            ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)))) volume :=
+      (ENNReal.measurable_ofReal.comp hinner_meas).aemeasurable
+    exact hRHS.congr (Filter.Eventually.of_forall (fun x => by simp only [hpdf]))
+  have htop : ∀ᵐ x ∂volume,
+      ENNReal.ofReal (multivariateGaussianPDF n (μ : Fin n → ℝ) S hS x) < ∞ := by simp
+  -- norm bridge and scalar identities
+  have hnorm2 : ‖Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B t‖ ^ 2
+      = (t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ) := by
+    rw [← real_inner_self_eq_norm_sq,
+      hinner (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B t) t, hcoLt,
+      ← Matrix.dotProduct_transpose_mulVec, hBT, Matrix.mulVec_mulVec, hBB]
+  have hscal : B.det * (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+      * (2 * Real.pi) ^ ((n : ℝ) / 2)) = 1 := by
+    rw [hBdetEq, mul_comm (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+      ((2 * Real.pi) ^ ((n : ℝ) / 2)), ← mul_assoc,
+      mul_comm (Real.sqrt S.det) ((2 * Real.pi) ^ ((n : ℝ) / 2)),
+      mul_inv_cancel₀ (mul_ne_zero hP'0 hSqrt0)]
+  have hscalC : Complex.ofReal B.det * (Complex.ofReal
+      (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+      * Complex.ofReal ((2 * Real.pi) ^ ((n : ℝ) / 2))) = 1 := by
+    rw [← Complex.ofReal_mul, ← Complex.ofReal_mul, hscal, Complex.ofReal_one]
+  have hfin : Complex.exp (Complex.ofReal (inner ℝ t μ) * Complex.I)
+      * Complex.exp (Complex.ofReal (-
+        ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ))) / 2)
+      = Complex.exp (Complex.ofReal (inner ℝ t μ) * Complex.I
+          - Complex.ofReal ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ)) / 2) := by
+    rw [Complex.ofReal_neg, neg_div, ← Complex.exp_add, sub_eq_add_neg]
+  -- pointwise splitting after substitution
+  have hsplit : ∀ x : EuclideanSpace ℝ (Fin n),
+      Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+        * (Complex.ofReal (Real.exp (-(((S⁻¹ *ᵥ (((μ + Matrix.toEuclideanLin (𝕜 := ℝ)
+          (m := Fin n) B x : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+          (((μ + Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B x : EuclideanSpace ℝ (Fin n))
+            : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)))
+          * Complex.exp (Complex.ofReal (inner ℝ (μ + Matrix.toEuclideanLin (𝕜 := ℝ)
+            (m := Fin n) B x) t) * Complex.I))
+      = (Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+          * Complex.exp (Complex.ofReal (inner ℝ μ t) * Complex.I))
+        * (Complex.ofReal (Real.exp (-‖x‖ ^ 2 / 2))
+          * Complex.exp (Complex.ofReal (inner ℝ x (Matrix.toEuclideanLin (𝕜 := ℝ)
+            (m := Fin n) B t)) * Complex.I)) := by
+    intro x
+    rw [hcoep x, hquad' x, ← neg_div, inner_add_left, Complex.ofReal_add, add_mul,
+      hbridge x, Complex.exp_add]
+    ring
+  -- rearrangement and exponent normalization for the endgame
+  have hrearr : Complex.ofReal B.det
+      * ((Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+          * Complex.exp (Complex.ofReal (inner ℝ μ t) * Complex.I))
+        * (Complex.ofReal ((2 * Real.pi) ^ ((n : ℝ) / 2))
+          * Complex.exp (Complex.ofReal (-
+            ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ))) / 2)))
+      = (Complex.ofReal B.det * (Complex.ofReal
+        (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+        * Complex.ofReal ((2 * Real.pi) ^ ((n : ℝ) / 2))))
+      * (Complex.exp (Complex.ofReal (inner ℝ μ t) * Complex.I)
+        * Complex.exp (Complex.ofReal (-
+          ((t : Fin n → ℝ) ⬝ᵥ S *ᵥ (t : Fin n → ℝ))) / 2)) := by
+    ring
+  -- substitution
+  have hsub := integral_subst n μ B hBdetpos
+    (fun x => Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+      * (Complex.ofReal (Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+        ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)))
+        * Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)))
+    (by fun_prop)
+  -- substitution + pointwise splitting + const extraction, in one step (defeq-chained,
+  -- no brittle `rw` matching of the substituted integrand)
+  have hstep2 : ∫ x : EuclideanSpace ℝ (Fin n), Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+      * (Complex.ofReal (Real.exp (-(((S⁻¹ *ᵥ ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) ⬝ᵥ
+        ((x : Fin n → ℝ) - (μ : Fin n → ℝ))) / 2)))
+        * Complex.exp (Complex.ofReal (inner ℝ x t) * Complex.I)) ∂volume
+      = (B.det : ℝ) • ((Complex.ofReal (((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹)
+          * Complex.exp (Complex.ofReal (inner ℝ μ t) * Complex.I))
+          * ∫ x : EuclideanSpace ℝ (Fin n), Complex.ofReal (Real.exp (-‖x‖ ^ 2 / 2))
+            * Complex.exp (Complex.ofReal (inner ℝ x (Matrix.toEuclideanLin (𝕜 := ℝ)
+              (m := Fin n) B t)) * Complex.I) ∂volume) := by
+    refine Eq.trans hsub (congrArg ((B.det : ℝ) • ·)
+      (Eq.trans (integral_congr_ae (Filter.Eventually.of_forall (fun y => hsplit y)))
+        (integral_const_mul _
+          (fun x : EuclideanSpace ℝ (Fin n) =>
+            Complex.ofReal (Real.exp (-‖x‖ ^ 2 / 2))
+              * Complex.exp (Complex.ofReal (inner ℝ x (Matrix.toEuclideanLin (𝕜 := ℝ)
+                (m := Fin n) B t)) * Complex.I)))))
+  rw [charFun_apply]
+  rw [integral_withDensity_eq_integral_toReal_smul₀ hmeasP htop]
+  simp only [hpoint]
+  rw [hstep2, Complex.real_smul,
+    stdGaussianDensity_ft (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B t)]
+  simp only [Fintype.card_fin]
+  rw [← Complex.ofReal_pow, ← Complex.ofReal_neg, hnorm2, hrearr, hscalC, one_mul,
+    real_inner_comm t μ, hfin]
+
+
 theorem integral_norm_gaussian_bounded
   (n : ℕ)
   (S : Matrix (Fin n) (Fin n) ℝ)
@@ -270,3 +571,4 @@ theorem integral_norm_gaussian_bounded
     * (1 / Real.sqrt ( (A⁻¹ * A⁻¹ᵀ).det ))) volume
   := by
   sorry
+
