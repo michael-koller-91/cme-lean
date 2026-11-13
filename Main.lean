@@ -2123,4 +2123,96 @@ theorem cme_pointwise_convergence
   exact Tendsto.congr' (Filter.Eventually.of_forall fun K => by simp) h1
 
 
+/-! ## Step B.1 of `plan_main_theorem.md`: quantitative Gaussian domination -/
 
+
+/-- The Euclidean norm squared of a plain vector agrees with its dot product with itself. -/
+theorem dotProduct_self_eq_norm_sq {n : ℕ} (v : Fin n → ℝ) :
+    v ⬝ᵥ v = ‖(WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n))‖ ^ 2 := by
+  calc v ⬝ᵥ v = v ⬝ᵥ star v := by rw [show star v = v from by simp]
+    _ = inner ℝ (WithLp.toLp 2 v) (WithLp.toLp 2 v) :=
+        (EuclideanSpace.inner_toLp_toLp v v).symm
+    _ = ‖WithLp.toLp 2 v‖ ^ 2 := real_inner_self_eq_norm_sq _
+
+
+/-- Quantitative positive definiteness (Step B.1 of `plan_main_theorem.md`): a positive
+definite matrix has a quadratic form dominating a positive multiple of `v ⬝ᵥ v`. Via the
+positive square root `B = √M` and the operator norm of `B⁻¹`:
+`‖v‖ = ‖B⁻¹ (B v)‖ ≤ ‖B⁻¹‖ ‖B v‖`. -/
+theorem posDef_quadForm_ge (n : ℕ) (M : Matrix (Fin n) (Fin n) ℝ) (hM : M.PosDef) :
+    ∃ lam : ℝ, 0 < lam ∧ ∀ v : Fin n → ℝ, lam * (v ⬝ᵥ v) ≤ (M *ᵥ v) ⬝ᵥ v := by
+  classical
+  have hM0 : 0 ≤ M := Matrix.nonneg_iff_posSemidef.mpr hM.posSemidef
+  set B : Matrix (Fin n) (Fin n) ℝ := CFC.sqrt M with hBdef
+  have hBB : B * B = M := CFC.sqrt_mul_sqrt_self M hM0
+  have hBnn : 0 ≤ B := by rw [hBdef]; exact CFC.sqrt_nonneg M
+  have hBher : B.IsHermitian := (Matrix.nonneg_iff_posSemidef.mp hBnn).1
+  have hBT : Bᵀ = B := by
+    rw [← Matrix.conjTranspose_eq_transpose_of_trivial]; exact hBher
+  have hBdetSq : B.det ^ 2 = M.det := by rw [pow_two, ← Matrix.det_mul, hBB]
+  have hBdet : IsUnit B.det := isUnit_iff_ne_zero.mpr (by
+    intro h0
+    have h2 : M.det = 0 := by rw [← hBdetSq, h0]; simp
+    exact absurd h2 (ne_of_gt hM.det_pos))
+  -- the shift identity
+  have hinv : ∀ u : Fin n → ℝ, B⁻¹ *ᵥ (B *ᵥ u) = u := by
+    intro u
+    rw [Matrix.mulVec_mulVec, Matrix.nonsing_inv_mul B hBdet, Matrix.one_mulVec]
+  -- the mulVec of `B⁻¹` as a continuous linear map, with its operator norm
+  set L : EuclideanSpace ℝ (Fin n) →L[ℝ] EuclideanSpace ℝ (Fin n) :=
+    Matrix.toEuclideanCLM (𝕜 := ℝ) (n := Fin n) B⁻¹ with hLdef
+  have hLapply : ∀ x : EuclideanSpace ℝ (Fin n),
+      (L x).ofLp = B⁻¹ *ᵥ x.ofLp := fun x => Matrix.ofLp_toEuclideanCLM B⁻¹ x
+  set K : ℝ := ‖L‖ with hKdef
+  -- the key element identity: `v = B⁻¹ *ᵥ (B *ᵥ v)` at the `EuclideanSpace` level
+  have h1 : ∀ v : Fin n → ℝ,
+      (WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n)) = L (WithLp.toLp 2 (B *ᵥ v)) := by
+    intro v
+    apply WithLp.ofLp_injective
+    rw [WithLp.ofLp_toLp, hLapply (WithLp.toLp 2 (B *ᵥ v)), WithLp.ofLp_toLp]
+    exact (hinv v).symm
+  by_cases hK0 : K = 0
+  · -- trivial space: every quadratic form vanishes
+    refine ⟨1, one_pos, fun v => ?_⟩
+    have hnorm0 : ‖(WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n))‖ = 0 := by
+      have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (B *ᵥ v))
+      rw [← h1 v, ← hKdef, hK0, zero_mul] at h2
+      exact le_antisymm h2 (norm_nonneg _)
+    have hRHS : 0 ≤ (M *ᵥ v) ⬝ᵥ v := by
+      have h := Matrix.PosSemidef.dotProduct_mulVec_nonneg hM.posSemidef v
+      rwa [dotProduct_comm] at h
+    rw [dotProduct_self_eq_norm_sq v, hnorm0]
+    simp
+    exact hRHS
+  · have hKpos : 0 < K := by
+      rw [hKdef]
+      refine norm_pos_iff.mpr ?_
+      intro hL0
+      exact hK0 (by rw [hKdef, hL0]; exact norm_zero)
+    refine ⟨K⁻¹ * K⁻¹, by positivity, fun v => ?_⟩
+    have hbound : K⁻¹ * ‖(WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n))‖
+        ≤ ‖(WithLp.toLp 2 (B *ᵥ v) : EuclideanSpace ℝ (Fin n))‖ := by
+      have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (B *ᵥ v))
+      rw [← h1 v, ← hKdef] at h2
+      have h3 := mul_le_mul_of_nonneg_left h2 (inv_nonneg.mpr (le_of_lt hKpos))
+      rwa [← mul_assoc, inv_mul_cancel₀ hK0, one_mul] at h3
+    have hmove : (M *ᵥ v) ⬝ᵥ v
+        = ‖(WithLp.toLp 2 (B *ᵥ v) : EuclideanSpace ℝ (Fin n))‖ ^ 2 := by
+      have hid : (M *ᵥ v) = B *ᵥ (B *ᵥ v) := by
+        rw [Matrix.mulVec_mulVec, ← hBB]
+      have ht : v ⬝ᵥ Bᵀ *ᵥ (B *ᵥ v) = (B *ᵥ v) ⬝ᵥ B *ᵥ v :=
+        Matrix.dotProduct_transpose_mulVec B v (B *ᵥ v)
+      rw [hBT] at ht
+      calc (M *ᵥ v) ⬝ᵥ v = (B *ᵥ (B *ᵥ v)) ⬝ᵥ v := by rw [hid]
+        _ = v ⬝ᵥ (B *ᵥ (B *ᵥ v)) := dotProduct_comm _ _
+        _ = (B *ᵥ v) ⬝ᵥ (B *ᵥ v) := ht
+        _ = ‖(WithLp.toLp 2 (B *ᵥ v) : EuclideanSpace ℝ (Fin n))‖ ^ 2 :=
+            dotProduct_self_eq_norm_sq (B *ᵥ v)
+    calc K⁻¹ * K⁻¹ * (v ⬝ᵥ v)
+        = (K⁻¹ * ‖(WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n))‖) ^ 2 := by
+          rw [dotProduct_self_eq_norm_sq v]
+          ring
+      _ ≤ ‖(WithLp.toLp 2 (B *ᵥ v) : EuclideanSpace ℝ (Fin n))‖ ^ 2 :=
+          (sq_le_sq₀ (mul_nonneg (inv_nonneg.mpr (le_of_lt hKpos)) (norm_nonneg _))
+            (norm_nonneg _)).mpr hbound
+      _ = (M *ᵥ v) ⬝ᵥ v := hmove.symm
