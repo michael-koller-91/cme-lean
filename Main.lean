@@ -2427,3 +2427,138 @@ theorem noiseDens_decay (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDe
     rw [hform, mul_assoc]
     exact mul_le_mul_of_nonneg_left hexp
       (le_of_lt (inv_pos.mpr (mul_pos h2pi hSqrtpos)))
+set_option linter.unusedVariables false in
+/-- Uniform moment bound (Step A.1 of `plan_main_theorem.md`): on the ball `‖y‖ ≤ r` the
+`K`-independent factor `∫ ‖h‖ f_n(y − A h) dh` is bounded by a constant depending only on
+`n, S, A, r`. Via the translation `h = h' + A⁻¹ y` (`integral_toLp_trans`), the triangle
+inequality, and the per-`y` integrability `integral_gaussian_bounded`. -/
+theorem noiseDens_moment_uniform (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (r : ℝ) (hr : 0 < r) :
+    ∃ C : ℝ, ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume ≤ C := by
+  classical
+  -- the operator-norm constant of `A⁻¹`
+  set L : EuclideanSpace ℝ (Fin n) →L[ℝ] EuclideanSpace ℝ (Fin n) :=
+    Matrix.toEuclideanCLM (𝕜 := ℝ) (n := Fin n) A⁻¹ with hLdef
+  have hLapply : ∀ x : EuclideanSpace ℝ (Fin n),
+      (L x).ofLp = A⁻¹ *ᵥ x.ofLp := fun x => Matrix.ofLp_toEuclideanCLM A⁻¹ x
+  set K : ℝ := ‖L‖ with hKdef
+  have hK0 : 0 ≤ K := norm_nonneg _
+  have hAYle : ∀ y : EuclideanSpace ℝ (Fin n),
+      ‖(WithLp.toLp 2 (A⁻¹.mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ≤ K * ‖y‖ := by
+    intro y
+    have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (y : Fin n → ℝ))
+    have h3 : (WithLp.toLp 2 (A⁻¹.mulVec (y : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+        = L (WithLp.toLp 2 (y : Fin n → ℝ)) := by
+      apply WithLp.ofLp_injective
+      show A⁻¹ *ᵥ (y : Fin n → ℝ) = A⁻¹ *ᵥ (y : Fin n → ℝ)
+      rfl
+    rw [← h3] at h2
+    exact h2
+  -- the mass and integrability of the noise density at `y = 0`
+  have hint0 : ∫ h : EuclideanSpace ℝ (Fin n), noiseDens n S hS A 0 h ∂volume
+      = (|A.det| : ℝ)⁻¹ := integral_noise_pullback n S hS A hA 0
+  have hnd0 : MeasureTheory.Integrable (noiseDens n S hS A 0) volume :=
+    MeasureTheory.Integrable.of_integral_ne_zero (by
+      rw [hint0]
+      exact inv_ne_zero (abs_ne_zero.mpr (isUnit_iff_ne_zero.mp hA)))
+  refine ⟨(∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A 0 h ∂volume)
+      + K * r * (|A.det| : ℝ)⁻¹, ?_⟩
+  intro y hy
+  set c : Fin n → ℝ := A⁻¹.mulVec (y : Fin n → ℝ) with hc
+  have hAc : A.mulVec c = (y : Fin n → ℝ) := by
+    rw [hc, Matrix.mulVec_mulVec, Matrix.mul_nonsing_inv A hA, Matrix.one_mulVec]
+  -- the measurability of the translated integrand
+  have hG : MeasureTheory.AEStronglyMeasurable (fun w : EuclideanSpace ℝ (Fin n) =>
+      ‖w‖ * noiseDens n S hS A y w) volume := by
+    have hndY : MeasureTheory.AEStronglyMeasurable (noiseDens n S hS A y) volume := by
+      have hcomp : noiseDens n S hS A y
+          = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+            (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+        funext h
+        exact noiseDens_eq n S hS A y h
+      rw [hcomp]
+      exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+        (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+          y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aestronglyMeasurable
+    exact ((Continuous.aemeasurable continuous_norm).aestronglyMeasurable).mul hndY
+  calc ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume
+      = ∫ x : EuclideanSpace ℝ (Fin n),
+          ‖(WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+            * noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ))) ∂volume :=
+        (integral_toLp_trans n c
+          (fun w : EuclideanSpace ℝ (Fin n) => ‖w‖ * noiseDens n S hS A y w) hG).symm
+    _ = ∫ x : EuclideanSpace ℝ (Fin n),
+          ‖(WithLp.toLp 2 (x : Fin n → ℝ))
+              + (WithLp.toLp 2 c : EuclideanSpace ℝ (Fin n))‖
+            * noiseDens n S hS A 0 x ∂volume := by
+        refine integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+        show ‖(WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+            * noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ)))
+          = ‖(WithLp.toLp 2 (x : Fin n → ℝ))
+              + (WithLp.toLp 2 c : EuclideanSpace ℝ (Fin n))‖
+            * noiseDens n S hS A 0 x
+        have hndEq : noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ)))
+            = noiseDens n S hS A 0 x := by
+          simp only [noiseDens]
+          rw [Matrix.mulVec_add, hAc, WithLp.ofLp_zero]
+          rw [show ((y : Fin n → ℝ) - (y + A.mulVec (x : Fin n → ℝ)))
+              = (0 - A.mulVec (x : Fin n → ℝ)) from by ring]
+        have hnormEq : (WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+            = (WithLp.toLp 2 (x : Fin n → ℝ))
+              + (WithLp.toLp 2 c : EuclideanSpace ℝ (Fin n)) := by
+          rw [WithLp.toLp_add, add_comm]
+        rw [hndEq, hnormEq]
+    _ ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+          (‖x‖ + K * ‖y‖) * noiseDens n S hS A 0 x ∂volume := by
+        refine integral_mono_of_nonneg
+          (Filter.Eventually.of_forall fun x => mul_nonneg (norm_nonneg _)
+            (by
+              simp only [noiseDens]
+              rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+                (WithLp.toLp 2 (WithLp.ofLp 0 - A.mulVec (x : Fin n → ℝ)))]
+              positivity))
+          ?_ (Filter.Eventually.of_forall fun x => ?_)
+        · -- integrability of the dominating integrand
+          have hA : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+              ‖x‖ * noiseDens n S hS A 0 x) volume := by
+            simpa only [noiseDens] using integral_gaussian_bounded n S hS A hA 0
+          have hB : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+              (K * ‖y‖) * noiseDens n S hS A 0 x) volume := by
+            exact (MeasureTheory.Integrable.smul (K * ‖y‖) hnd0).congr
+              (Filter.Eventually.of_forall fun x => by simp)
+          have hpt : ∀ x : EuclideanSpace ℝ (Fin n),
+              ‖x‖ * noiseDens n S hS A 0 x + (K * ‖y‖) * noiseDens n S hS A 0 x
+              = (‖x‖ + K * ‖y‖) * noiseDens n S hS A 0 x := fun x => by rw [add_mul]
+          exact (hA.add hB).congr (Filter.Eventually.of_forall fun x => hpt x)
+        · -- the pointwise bound
+          refine mul_le_mul_of_nonneg_right
+            (le_trans (norm_add_le _ _)
+              (add_le_add (le_refl _) (hAYle y))) (by
+              simp only [noiseDens]
+              rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+                (WithLp.toLp 2 (WithLp.ofLp 0 - A.mulVec (x : Fin n → ℝ)))]
+              positivity)
+  -- the split and the final bound
+  have hA : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      ‖x‖ * noiseDens n S hS A 0 x) volume := by
+    simpa only [noiseDens] using integral_gaussian_bounded n S hS A hA 0
+  have hB : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      (K * ‖y‖) * noiseDens n S hS A 0 x) volume := by
+    exact (MeasureTheory.Integrable.smul (K * ‖y‖) hnd0).congr
+      (Filter.Eventually.of_forall fun x => by simp)
+  have hpt : ∀ x : EuclideanSpace ℝ (Fin n),
+      (‖x‖ + K * ‖y‖) * noiseDens n S hS A 0 x
+      = ‖x‖ * noiseDens n S hS A 0 x + (K * ‖y‖) * noiseDens n S hS A 0 x := fun x => by
+    rw [add_mul]
+  have hsplit : ∫ x : EuclideanSpace ℝ (Fin n),
+      (‖x‖ + K * ‖y‖) * noiseDens n S hS A 0 x ∂volume
+    = (∫ x : EuclideanSpace ℝ (Fin n), ‖x‖ * noiseDens n S hS A 0 x ∂volume)
+      + (∫ x : EuclideanSpace ℝ (Fin n), (K * ‖y‖) * noiseDens n S hS A 0 x ∂volume) := by
+    rw [integral_congr_ae (Filter.Eventually.of_forall fun x => hpt x), integral_add hA hB]
+  have hc' : ∫ x : EuclideanSpace ℝ (Fin n),
+      (K * ‖y‖) * noiseDens n S hS A 0 x ∂volume ≤ (K * r) * (|A.det| : ℝ)⁻¹ := by
+    rw [integral_const_mul, hint0]
+    exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hy hK0)
+      (inv_nonneg.mpr (abs_nonneg A.det))
+  linarith [hsplit, hc']
