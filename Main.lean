@@ -2026,4 +2026,101 @@ theorem fyPDF_eq_map
   rw [charFun_map_fy n S hS A f hf t, charFun_fyPDF_density n S hS A f hf t]
 
 
+/-! ## The main result (appendix_1.tex, `thm:main_result`)
+
+The conditional mean estimate (CME) for the model `y = A h + n` is
+`ĥ(y) = ∫ h · f_n(y - A h) f_h(h) / f_y(y) dh`. The main theorem states that if `f_h^{(K)}`
+is a sequence of continuous pdfs converging uniformly to `f_h`, then the corresponding CMEs
+converge to `ĥ` pointwise, and uniformly on every closed ball `B_r = {y : ‖y‖ ≤ r}`.
+
+Notes on the formalization:
+* Membership in the set `C` of continuous pdfs is expressed as `IsPdf f ∧ Continuous f`
+  (`IsPdf` is the existing predicate; continuity is a separate hypothesis, as in
+  `uniform_convergence_fy_pdf`).
+* `f_n = N(0, Σ)` is not an arbitrary member of `C` but *the* Gaussian pdf
+  `multivariateGaussianPDF n 0 S hS` (via `noiseDens`/`fyPDF`); its membership in `C`
+  (positivity, mass, continuity) is derivable from `S.PosDef` and is not a hypothesis.
+* Invertibility of `A` is `IsUnit A.det`, matching `uniform_convergence_fy`.
+* The statement does *not* need `VanishesAtInfinity fh`: the `K`-independent factor
+  `∫ ‖h‖ f_n(y - A h) dh` in the proof is bounded via `lem:bound_norm`'s Gaussian moment
+  computation, which involves only `f_n`.
+* `ĥ` and `ĥ^{(K)}` are the same construction applied to `fh` and `fhK K` respectively
+  (one definition `cme`, instantiated twice).
+* Division by `f_y^{(K)}(y)` is total in `ℝ`; positivity of `f_y^{(K)}` (proved in the
+  appendix) is a fact about the construction, not a hypothesis of the statement. -/
+
+
+/-- The conditional mean estimate associated with a pdf `f` in the model `y = A h + n`
+(appendix_1.tex, Eq. (cme)): `y ↦ ∫ h · f_n(y - A h) f(h) / f_y(y) dh`, where
+`f_y` is the observation density `fyPDF` induced by `f`. This is a Bochner integral of an
+`EuclideanSpace ℝ (Fin n)`-valued integrand. For `f := fhK K` this is `ĥ^{(K)}` and for
+`f := fh` this is `ĥ`. -/
+noncomputable def cme (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (y : EuclideanSpace ℝ (Fin n)) : EuclideanSpace ℝ (Fin n) :=
+  ∫ h : EuclideanSpace ℝ (Fin n),
+    ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h
+
+
+/-- **Main result** (appendix_1.tex, `thm:main_result`): with `f_h` a continuous pdf,
+`f_n = N(0, Σ)` the Gaussian noise density, `A` invertible, and `f_h^{(K)}` a sequence of
+continuous pdfs converging uniformly to `f_h`, the conditional mean estimates
+`ĥ^{(K)}(y) = ∫ h f_n(y - A h) f_h^{(K)}(h) / f_y^{(K)}(y) dh` converge to
+`ĥ(y) = ∫ h f_n(y - A h) f_h(h) / f_y(y) dh` *uniformly on every closed ball*
+`B_r = {y : ‖y‖ ≤ r}`, `r > 0` — phrased as the `ℝ≥0∞`-supremum of the norm differences
+over the ball tending to `0`.
+
+The pointwise convergence of Eq. (pointwise_convergence) is the easy consequence
+`cme_pointwise_convergence` below. -/
+theorem main_theorem
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
+    ∀ r : ℝ, 0 < r →
+      Tendsto (fun K => ⨆ y ∈ Metric.closedBall 0 r,
+          ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  sorry
+
+
+/-- Pointwise convergence of the conditional mean estimates (appendix_1.tex, Eq.
+(pointwise_convergence) of `thm:main_result`): an immediate consequence of
+`main_theorem`, since every point lies in some sufficiently large ball. -/
+theorem cme_pointwise_convergence
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (y : EuclideanSpace ℝ (Fin n)) :
+    Tendsto (fun K => ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  have hr : 0 < ‖y‖ + 1 := by linarith [norm_nonneg y]
+  have hmem : y ∈ Metric.closedBall 0 (‖y‖ + 1) :=
+    Metric.mem_closedBall'.2 (by
+      rw [dist_eq_norm, zero_sub, norm_neg]
+      linarith [norm_nonneg y])
+  have hsup := main_theorem n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv
+    (‖y‖ + 1) hr
+  have h0 : Tendsto (fun K => ENNReal.ofReal
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) :=
+    tendsto_of_tendsto_of_tendsto_of_le_of_le (g := fun _ : ℕ => (0 : ℝ≥0∞))
+      tendsto_const_nhds hsup (fun _ => zero_le)
+      (fun K => le_iSup₂_of_le y hmem (le_refl _))
+  have h1 : Tendsto (fun K => ENNReal.toReal (ENNReal.ofReal
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖)) atTop (nhds 0) :=
+    (ENNReal.continuousAt_toReal (x := (0 : ℝ≥0∞)) (by simp)).tendsto.comp h0
+  exact Tendsto.congr' (Filter.Eventually.of_forall fun K => by simp) h1
+
+
 
