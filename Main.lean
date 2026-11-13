@@ -2061,68 +2061,6 @@ noncomputable def cme (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
   ∫ h : EuclideanSpace ℝ (Fin n),
     ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h
 
-
-/-- **Main result** (appendix_1.tex, `thm:main_result`): with `f_h` a continuous pdf,
-`f_n = N(0, Σ)` the Gaussian noise density, `A` invertible, and `f_h^{(K)}` a sequence of
-continuous pdfs converging uniformly to `f_h`, the conditional mean estimates
-`ĥ^{(K)}(y) = ∫ h f_n(y - A h) f_h^{(K)}(h) / f_y^{(K)}(y) dh` converge to
-`ĥ(y) = ∫ h f_n(y - A h) f_h(h) / f_y(y) dh` *uniformly on every closed ball*
-`B_r = {y : ‖y‖ ≤ r}`, `r > 0` — phrased as the `ℝ≥0∞`-supremum of the norm differences
-over the ball tending to `0`.
-
-The pointwise convergence of Eq. (pointwise_convergence) is the easy consequence
-`cme_pointwise_convergence` below. -/
-theorem main_theorem
-    (n : ℕ)
-    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
-    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhpdf : IsPdf fh)
-    (hfhcont : Continuous fh)
-    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhKpdf : ∀ K, IsPdf (fhK K))
-    (hfhKcont : ∀ K, Continuous (fhK K))
-    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
-    ∀ r : ℝ, 0 < r →
-      Tendsto (fun K => ⨆ y ∈ Metric.closedBall 0 r,
-          ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
-  sorry
-
-
-/-- Pointwise convergence of the conditional mean estimates (appendix_1.tex, Eq.
-(pointwise_convergence) of `thm:main_result`): an immediate consequence of
-`main_theorem`, since every point lies in some sufficiently large ball. -/
-theorem cme_pointwise_convergence
-    (n : ℕ)
-    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
-    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhpdf : IsPdf fh)
-    (hfhcont : Continuous fh)
-    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhKpdf : ∀ K, IsPdf (fhK K))
-    (hfhKcont : ∀ K, Continuous (fhK K))
-    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
-    (y : EuclideanSpace ℝ (Fin n)) :
-    Tendsto (fun K => ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
-  have hr : 0 < ‖y‖ + 1 := by linarith [norm_nonneg y]
-  have hmem : y ∈ Metric.closedBall 0 (‖y‖ + 1) :=
-    Metric.mem_closedBall'.2 (by
-      rw [dist_eq_norm, zero_sub, norm_neg]
-      linarith [norm_nonneg y])
-  have hsup := main_theorem n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv
-    (‖y‖ + 1) hr
-  have h0 : Tendsto (fun K => ENNReal.ofReal
-      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) :=
-    tendsto_of_tendsto_of_tendsto_of_le_of_le (g := fun _ : ℕ => (0 : ℝ≥0∞))
-      tendsto_const_nhds hsup (fun _ => zero_le)
-      (fun K => le_iSup₂_of_le y hmem (le_refl _))
-  have h1 : Tendsto (fun K => ENNReal.toReal (ENNReal.ofReal
-      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖)) atTop (nhds 0) :=
-    (ENNReal.continuousAt_toReal (x := (0 : ℝ≥0∞)) (by simp)).tendsto.comp h0
-  exact Tendsto.congr' (Filter.Eventually.of_forall fun K => by simp) h1
-
-
 /-! ## Step B.1 of `plan_main_theorem.md`: quantitative Gaussian domination -/
 
 
@@ -2562,3 +2500,1048 @@ theorem noiseDens_moment_uniform (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS 
     exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hy hK0)
       (inv_nonneg.mpr (abs_nonneg A.det))
   linarith [hsplit, hc']
+
+/-- Step B.2 of `plan_main_theorem.md` (first part): the function `h ↦ ‖h‖ · f_n(−A h)`
+is globally bounded by a positive constant. From the decay bound B.1 at `y = 0`, with the
+two-case split `‖h‖ ≤ 1` / `‖h‖ ≥ 1` and the elementary estimates
+`Real.exp (-(c * ‖h‖ ^ 2)) ≤ 1` and `c * ‖h‖ ≤ Real.exp (c * ‖h‖ ^ 2)`
+(via `Real.add_one_le_exp`), so that `‖h‖ * exp(−c‖h‖²) ≤ max(1, 1/c)`. -/
+theorem norm_mul_noiseDens_zero_le (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) :
+    ∃ D₀ : ℝ, 0 < D₀ ∧ ∀ h : EuclideanSpace ℝ (Fin n),
+      ‖h‖ * noiseDens n S hS A 0 h ≤ D₀ := by
+  classical
+  obtain ⟨κ, c, cS, hκ, hc, hcS, hdecay⟩ := noiseDens_decay n S hS A hA
+  refine ⟨cS * max 1 c⁻¹, mul_pos hcS (by positivity), ?_⟩
+  intro h
+  have hnorm0 : (0 : ℝ) ≤ ‖h‖ := norm_nonneg _
+  -- the decay bound B.1 evaluated at `y = 0`
+  have h0 : noiseDens n S hS A 0 h ≤ cS * Real.exp (-(c * ‖h‖ ^ 2)) := by
+    have h2 := hdecay 0 h
+    rwa [show (κ * (‖(0 : EuclideanSpace ℝ (Fin n))‖ ^ 2)) = 0 from by simp,
+      Real.exp_zero, mul_one] at h2
+  rcases le_or_gt ‖h‖ 1 with h1 | h1
+  · -- small case: `‖h‖ ≤ 1`, `exp(−c‖h‖²) ≤ 1`
+    have hexpNonNeg : 0 ≤ c * ‖h‖ ^ 2 := mul_nonneg hc.le (sq_nonneg _)
+    have he1 : Real.exp (-(c * ‖h‖ ^ 2)) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+    have hprod : ‖h‖ * Real.exp (-(c * ‖h‖ ^ 2)) ≤ 1 :=
+      (mul_le_mul h1 he1 (Real.exp_nonneg _) zero_le_one).trans (by norm_num)
+    calc ‖h‖ * noiseDens n S hS A 0 h
+        ≤ ‖h‖ * (cS * Real.exp (-(c * ‖h‖ ^ 2))) :=
+          mul_le_mul_of_nonneg_left h0 hnorm0
+      _ = cS * (‖h‖ * Real.exp (-(c * ‖h‖ ^ 2))) := by ring
+      _ ≤ cS * max 1 c⁻¹ :=
+          mul_le_mul_of_nonneg_left (hprod.trans (le_max_left (1 : ℝ) c⁻¹)) hcS.le
+  · -- large case: `‖h‖ ≥ 1`, `‖h‖ * exp(−c‖h‖²) ≤ 1/c`
+    have hpos : 0 < c * ‖h‖ := mul_pos hc (zero_lt_one.trans h1)
+    have hne : ‖h‖ ≠ 0 := ne_of_gt (zero_lt_one.trans h1)
+    have h1le : (1 : ℝ) ≤ ‖h‖ := h1.le
+    have hge : c * ‖h‖ ≤ c * ‖h‖ ^ 2 := by
+      calc c * ‖h‖ = (c * ‖h‖) * 1 := by ring
+        _ ≤ (c * ‖h‖) * ‖h‖ := mul_le_mul_of_nonneg_left h1le (mul_nonneg hc.le hnorm0)
+        _ = c * ‖h‖ ^ 2 := by ring
+    have hexple : c * ‖h‖ ≤ Real.exp (c * ‖h‖ ^ 2) := by
+      have h1' := Real.add_one_le_exp (c * ‖h‖)
+      have h2' := Real.exp_monotone hge
+      linarith
+    have hle : Real.exp (-(c * ‖h‖ ^ 2)) ≤ (c * ‖h‖)⁻¹ := by
+      rw [Real.exp_neg]
+      exact (inv_le_inv₀ (Real.exp_pos _) hpos).mpr hexple
+    calc ‖h‖ * noiseDens n S hS A 0 h
+        ≤ ‖h‖ * (cS * Real.exp (-(c * ‖h‖ ^ 2))) :=
+          mul_le_mul_of_nonneg_left h0 hnorm0
+      _ = cS * (‖h‖ * Real.exp (-(c * ‖h‖ ^ 2))) := by ring
+      _ ≤ cS * (‖h‖ * (c * ‖h‖)⁻¹) :=
+          mul_le_mul_of_nonneg_left
+            (mul_le_mul_of_nonneg_left hle hnorm0) hcS.le
+      _ = cS * c⁻¹ := by
+          rw [_root_.mul_inv_rev, mul_inv_cancel_left₀ hne]
+      _ ≤ cS * max 1 c⁻¹ := mul_le_mul_of_nonneg_left (le_max_right _ _) hcS.le
+
+set_option linter.unusedVariables false in
+/-- Step B.2 of `plan_main_theorem.md` (second part): the posterior moment
+`J(y) = ∫ h, (noiseDens n S hS A y h * f h) • h` is uniformly bounded on every ball
+`‖y‖ ≤ r`, with a constant depending only on `n, S, A, f, r`. Via the translation
+`h = h' + A⁻¹ y` (`integral_toLp_trans`), the triangle inequality, the `D₀`-bound of
+`norm_mul_noiseDens_zero_le`, the pointwise Gaussian bound
+`multivariateGaussianPDF_le_const` (so `noiseDens n S hS A 0 ≤ c₀`), and the translation
+invariance `∫ f (toLp (c + x)) = ∫ f = 1`. -/
+theorem posterior_moment_bound (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (r : ℝ) (hr : 0 < r) :
+    ∃ C : ℝ, ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      ‖∫ h : EuclideanSpace ℝ (Fin n), (noiseDens n S hS A y h * f h) • h ∂volume‖ ≤ C := by
+  classical
+  obtain ⟨D₀, _, hD₀⟩ := norm_mul_noiseDens_zero_le n S hS A hA
+  -- `c₀`: the constant pointwise bound on the Gaussian pdf
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hSdetpos
+  have hc₀pos : 0 < c₀ := by rw [hc₀def]; positivity
+  have hnd0le : ∀ x : EuclideanSpace ℝ (Fin n), noiseDens n S hS A 0 x ≤ c₀ := by
+    intro x
+    simp only [noiseDens]
+    exact multivariateGaussianPDF_le_const n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 (WithLp.ofLp 0 - A.mulVec (x : Fin n → ℝ)))
+  -- the operator-norm constant of `A⁻¹`
+  set L : EuclideanSpace ℝ (Fin n) →L[ℝ] EuclideanSpace ℝ (Fin n) :=
+    Matrix.toEuclideanCLM (𝕜 := ℝ) (n := Fin n) A⁻¹ with hLdef
+  set K : ℝ := ‖L‖ with hKdef
+  have hK0 : 0 ≤ K := norm_nonneg _
+  have hAYle : ∀ z : EuclideanSpace ℝ (Fin n),
+      ‖(WithLp.toLp 2 (A⁻¹.mulVec (z : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ≤ K * ‖z‖ := by
+    intro z
+    have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (z : Fin n → ℝ))
+    have h3 : (WithLp.toLp 2 (A⁻¹.mulVec (z : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+        = L (WithLp.toLp 2 (z : Fin n → ℝ)) := by
+      apply WithLp.ofLp_injective
+      show A⁻¹ *ᵥ (z : Fin n → ℝ) = A⁻¹ *ᵥ (z : Fin n → ℝ)
+      rfl
+    rw [← h3] at h2
+    exact h2
+  refine ⟨D₀ + K * r * c₀, ?_⟩
+  intro y hy
+  set c : Fin n → ℝ := A⁻¹.mulVec (y : Fin n → ℝ) with hc
+  have hAc : A.mulVec c = (y : Fin n → ℝ) := by
+    rw [hc, Matrix.mulVec_mulVec, Matrix.mul_nonsing_inv A hA, Matrix.one_mulVec]
+  set Cc : ℝ := ‖(WithLp.toLp 2 c : EuclideanSpace ℝ (Fin n))‖ with hCc
+  -- AES-strong measurability of the (vector-valued) translated integrand
+  have hGm : MeasureTheory.AEStronglyMeasurable
+      (fun w : EuclideanSpace ℝ (Fin n) => (noiseDens n S hS A y w * f w) • w) volume := by
+    have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+      have hcomp : noiseDens n S hS A y
+          = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+            (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+        funext h
+        exact noiseDens_eq n S hS A y h
+      rw [hcomp]
+      exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+        (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+          y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+    exact ((hndM.mul
+      ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)).smul
+      (measurable_id.aemeasurable)).aestronglyMeasurable
+  -- the translated mass of `f`
+  have hTint : ∫ x : EuclideanSpace ℝ (Fin n),
+      f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) ∂volume = 1 := by
+    rw [integral_toLp_trans n c f ((integrable_of_isPdf hf).aestronglyMeasurable)]
+    exact hf.2
+  have hTfint : MeasureTheory.Integrable
+      (fun x : EuclideanSpace ℝ (Fin n) => f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) volume :=
+    MeasureTheory.Integrable.of_integral_ne_zero (by rw [hTint]; exact one_ne_zero)
+  have hKint : MeasureTheory.Integrable
+      (fun x : EuclideanSpace ℝ (Fin n) =>
+        (D₀ + Cc * c₀) * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) volume :=
+    MeasureTheory.Integrable.smul (D₀ + Cc * c₀) hTfint
+  -- pointwise bound on the norm of the translated integrand
+  have hpw : ∀ x : EuclideanSpace ℝ (Fin n),
+      ‖(noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+        (WithLp.toLp 2 (c + (x : Fin n → ℝ)))‖
+      ≤ (D₀ + Cc * c₀) * f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) := by
+    intro x
+    have hsnd : 0 ≤ noiseDens n S hS A 0 x := by
+      simp only [noiseDens]
+      rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 (WithLp.ofLp 0 - A.mulVec (x : Fin n → ℝ)))]
+      positivity
+    have hfT : 0 ≤ f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) := hf.1 _
+    have hnormT : ‖(WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+        ≤ ‖x‖ + Cc := by
+      have hnormEq : (WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+          = (WithLp.toLp 2 (x : Fin n → ℝ))
+            + (WithLp.toLp 2 c : EuclideanSpace ℝ (Fin n)) := by
+        rw [WithLp.toLp_add, add_comm]
+      rw [hnormEq]
+      exact le_trans (norm_add_le _ _) (add_le_add (le_refl _) (le_refl Cc))
+    have hsplit1 : ‖(noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+        (WithLp.toLp 2 (c + (x : Fin n → ℝ)))‖
+        = (noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) *
+          ‖(WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ := by
+      rw [norm_smul, Real.norm_eq_abs, abs_of_nonneg (mul_nonneg hsnd hfT)]
+    calc ‖(noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+        (WithLp.toLp 2 (c + (x : Fin n → ℝ)))‖
+        = (noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) *
+            ‖(WithLp.toLp 2 (c + (x : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ := hsplit1
+      _ ≤ (noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) *
+            (‖x‖ + Cc) := mul_le_mul_of_nonneg_left hnormT (mul_nonneg hsnd hfT)
+      _ = (‖x‖ * noiseDens n S hS A 0 x + Cc * noiseDens n S hS A 0 x) *
+            f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) := by ring
+      _ ≤ (D₀ + Cc * c₀) * f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) := by
+          refine mul_le_mul_of_nonneg_right ?_ hfT
+          have h1 : ‖x‖ * noiseDens n S hS A 0 x ≤ D₀ := hD₀ x
+          have h2 : Cc * noiseDens n S hS A 0 x ≤ Cc * c₀ :=
+            mul_le_mul_of_nonneg_left (hnd0le x) (norm_nonneg _)
+          linarith
+  calc ‖∫ h : EuclideanSpace ℝ (Fin n), (noiseDens n S hS A y h * f h) • h ∂volume‖
+      = ‖∫ x : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ))) *
+            f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+            (WithLp.toLp 2 (c + (x : Fin n → ℝ))) ∂volume‖ :=
+        congrArg (fun w : EuclideanSpace ℝ (Fin n) => ‖w‖)
+          (integral_toLp_trans n c
+            (fun w : EuclideanSpace ℝ (Fin n) => (noiseDens n S hS A y w * f w) • w) hGm).symm
+    _ = ‖∫ x : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A 0 x * f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+            (WithLp.toLp 2 (c + (x : Fin n → ℝ))) ∂volume‖ := by
+        refine congrArg (fun w : EuclideanSpace ℝ (Fin n) => ‖w‖) ?_
+        refine integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+        show (noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ))) *
+            f (WithLp.toLp 2 (c + (x : Fin n → ℝ)))) •
+          (WithLp.toLp 2 (c + (x : Fin n → ℝ))) = _
+        have hndEq : noiseDens n S hS A y (WithLp.toLp 2 (c + (x : Fin n → ℝ)))
+            = noiseDens n S hS A 0 x := by
+          simp only [noiseDens]
+          rw [Matrix.mulVec_add, hAc, WithLp.ofLp_zero]
+          rw [show ((y : Fin n → ℝ) - (y + A.mulVec (x : Fin n → ℝ)))
+              = (0 - A.mulVec (x : Fin n → ℝ)) from by ring]
+        rw [hndEq]
+    _ ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+          (D₀ + Cc * c₀) * f (WithLp.toLp 2 (c + (x : Fin n → ℝ))) ∂volume :=
+        MeasureTheory.norm_integral_le_of_norm_le hKint
+          (Filter.Eventually.of_forall hpw)
+    _ = (D₀ + Cc * c₀) * 1 := by
+        rw [MeasureTheory.integral_const_mul, hTint]
+    _ = D₀ + Cc * c₀ := by ring
+    _ ≤ D₀ + K * r * c₀ := by
+        refine add_le_add_right ?_ _
+        exact mul_le_mul_of_nonneg_right
+          ((hAYle y).trans (mul_le_mul_of_nonneg_left hy hK0)) hc₀pos.le
+
+set_option linter.unusedVariables false in
+/-- Step B.3 of `plan_main_theorem.md`: the marginal density `f_y(y) = ∫ f_n(y − A h) f(h) dh`
+is strictly positive for every `y` and every pdf `f`. The integrand is nonnegative
+(pointwise positivity of the Gaussian pdf); if the integral vanished, the integrand would be
+zero a.e., and since `f_n > 0` everywhere this forces `f = 0` a.e., contradicting
+`∫ f = 1`. -/
+theorem fy_pos (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (y : EuclideanSpace ℝ (Fin n)) :
+    0 < fyPDF n S hS A f y := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  -- the integrand is nonnegative
+  have hposintegrand : ∀ h : EuclideanSpace ℝ (Fin n),
+      0 ≤ noiseDens n S hS A y h * f h := by
+    intro h
+    refine mul_nonneg ?_ (hf.1 h)
+    simp only [noiseDens]
+    rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+  -- pointwise strict positivity of `noiseDens`
+  have hndpos : ∀ h : EuclideanSpace ℝ (Fin n), 0 < noiseDens n S hS A y h := by
+    intro h
+    simp only [noiseDens]
+    rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+    exact mul_pos (inv_pos.mpr (mul_pos h2pi hSqrtpos)) (Real.exp_pos _)
+  -- integrability of the integrand, via the pointwise bound `noiseDens ≤ c₀`
+  have hndle : ∀ h : EuclideanSpace ℝ (Fin n), noiseDens n S hS A y h ≤ c₀ := by
+    intro h
+    simp only [noiseDens]
+    exact multivariateGaussianPDF_le_const n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+  have hinteg : MeasureTheory.Integrable
+      (fun h => noiseDens n S hS A y h * f h) volume := by
+    have hprodM : MeasureTheory.AEStronglyMeasurable
+        (fun h => noiseDens n S hS A y h * f h) volume := by
+      have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+        have hcomp : noiseDens n S hS A y
+            = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+              (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+          funext h
+          exact noiseDens_eq n S hS A y h
+        rw [hcomp]
+        exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+          (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+            y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+      exact (hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)).aestronglyMeasurable
+    have hfint : MeasureTheory.Integrable (fun h => c₀ * f h) volume :=
+      MeasureTheory.Integrable.smul c₀ (integrable_of_isPdf hf)
+    refine MeasureTheory.Integrable.mono' hfint hprodM
+      (Filter.Eventually.of_forall fun h => ?_)
+    rw [Real.norm_eq_abs, abs_eq_self.mpr (hposintegrand h)]
+    exact mul_le_mul_of_nonneg_right (hndle h) (hf.1 h)
+  have hnonneg : 0 ≤ fyPDF n S hS A f y := by
+    rw [fyPDF]
+    exact MeasureTheory.integral_nonneg hposintegrand
+  by_contra hcon
+  have hle : fyPDF n S hS A f y ≤ 0 := le_of_not_gt hcon
+  have hzero : fyPDF n S hS A f y = 0 := le_antisymm hle hnonneg
+  have haezero : (fun h => noiseDens n S hS A y h * f h) =ᵐ[volume] 0 :=
+    (MeasureTheory.integral_eq_zero_iff_of_nonneg_ae
+      (Filter.Eventually.of_forall hposintegrand) hinteg).mp hzero
+  -- therefore `f = 0` a.e., contradicting `∫ f = 1`
+  have hfeq : f =ᵐ[volume] 0 := by
+    filter_upwards [haezero] with h hval
+    rcases mul_eq_zero.mp hval with h0' | h0'
+    · exact absurd h0' (ne_of_gt (hndpos h))
+    · exact h0'
+  have hintf : ∫ x, f x ∂volume = 0 := by
+    rw [MeasureTheory.integral_congr_ae hfeq]
+    simp
+  rw [hf.2] at hintf
+  exact one_ne_zero hintf
+
+/-- Continuity of the Gaussian pdf (used by Step B.4 `fy_cont`). -/
+theorem multivariateGaussianPDF_continuous (n : ℕ) (m : Fin n → ℝ)
+    (Cov : Matrix (Fin n) (Fin n) ℝ) (hC : Cov.PosDef) :
+    Continuous (fun x : EuclideanSpace ℝ (Fin n) => multivariateGaussianPDF n m Cov hC x) := by
+  simp only [multivariateGaussianPDF]
+  fun_prop
+
+set_option linter.unusedVariables false in
+/-- Step B.4 of `plan_main_theorem.md`: for a continuous pdf `f` the marginal density
+`f_y = ∫ f_n(y − A h) f(h) dh` is continuous in `y`, by dominated convergence in the
+parameter (the integrand is dominated by `c₀ · f` and continuous in `y` for each `h`). -/
+theorem fy_cont (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (hfc : Continuous f) :
+    Continuous (fyPDF n S hS A f) := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  -- measurability of the parameter-dependent integrand
+  have hFm : ∀ y : EuclideanSpace ℝ (Fin n),
+      MeasureTheory.AEStronglyMeasurable
+        (fun h => noiseDens n S hS A y h * f h) volume := by
+    intro y
+    have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+      have hcomp : noiseDens n S hS A y
+          = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+            (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+        funext h
+        exact noiseDens_eq n S hS A y h
+      rw [hcomp]
+      exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+        (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+          y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+    exact (hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)).aestronglyMeasurable
+  -- the domination `‖noiseDens(y,h) · f h‖ ≤ c₀ · f h`
+  have hbnd : ∀ (y : EuclideanSpace ℝ (Fin n)) (h : EuclideanSpace ℝ (Fin n)),
+      ‖noiseDens n S hS A y h * f h‖ ≤ c₀ * f h := by
+    intro y h
+    have hsnd : 0 ≤ noiseDens n S hS A y h := by
+      simp only [noiseDens]
+      rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+      exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+    have hndle : noiseDens n S hS A y h ≤ c₀ := by
+      simp only [noiseDens]
+      exact multivariateGaussianPDF_le_const n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+    rw [Real.norm_eq_abs, abs_eq_self.mpr (mul_nonneg hsnd (hf.1 h))]
+    exact mul_le_mul_of_nonneg_right hndle (hf.1 h)
+  have hbint : MeasureTheory.Integrable (fun h => c₀ * f h) volume :=
+    MeasureTheory.Integrable.smul c₀ (integrable_of_isPdf hf)
+  -- continuity in `y` for every fixed `h`
+  have hcont : ∀ h : EuclideanSpace ℝ (Fin n),
+      Continuous (fun y => noiseDens n S hS A y h * f h) := by
+    intro h
+    have hndc : Continuous (fun y => noiseDens n S hS A y h) := by
+      have hcomp : (fun y : EuclideanSpace ℝ (Fin n) => noiseDens n S hS A y h)
+          = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+            (fun y => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+        funext y
+        exact noiseDens_eq n S hS A y h
+      rw [hcomp]
+      exact (multivariateGaussianPDF_continuous n (0 : Fin n → ℝ) S hS).comp
+        (by fun_prop : Continuous (fun y : EuclideanSpace ℝ (Fin n) =>
+          y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))
+    exact hndc.mul continuous_const
+  unfold fyPDF
+  refine continuous_iff_continuousAt.mpr fun y => ?_
+  refine MeasureTheory.continuousAt_of_dominated (x₀ := y)
+    (bound := fun h => c₀ * f h)
+    (Filter.Eventually.of_forall hFm)
+    (Filter.Eventually.of_forall fun x =>
+      Filter.Eventually.of_forall (hbnd x))
+    hbint
+    (Filter.Eventually.of_forall fun h => (hcont h).continuousAt)
+set_option linter.unusedVariables false in
+/-- Step B.5 of `plan_main_theorem.md`: on every ball `‖y‖ ≤ r` the marginal density `f_y`
+admits a positive lower bound `m` (its minimum over the compact ball, by B.3 `fy_pos` and
+B.4 `fy_cont`). -/
+theorem fy_min_pos (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (hfc : Continuous f)
+    (r : ℝ) (hr : 0 < r) :
+    ∃ m : ℝ, 0 < m ∧ ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      m ≤ fyPDF n S hS A f y := by
+  classical
+  have hcomp : IsCompact (Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) r) :=
+    ProperSpace.isCompact_closedBall _ _
+  have hne : (Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) r).Nonempty :=
+    ⟨0, Metric.mem_closedBall_self hr.le⟩
+  obtain ⟨y₀, hy₀mem, hy₀min⟩ := hcomp.exists_isMinOn hne
+    ((fy_cont n S hS A hA f hf hfc).continuousOn)
+  have hpos : 0 < fyPDF n S hS A f y₀ := fy_pos n S hS A hA f hf y₀
+  refine ⟨fyPDF n S hS A f y₀, hpos, ?_⟩
+  intro y hy
+  have hmem : y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) r := by
+    rw [Metric.mem_closedBall, dist_eq_norm, sub_zero]
+    exact hy
+  exact isMinOn_iff.mp hy₀min y hmem
+
+set_option linter.unusedVariables false in
+/-- Step B.6 of `plan_main_theorem.md`: for `K` large enough, the marginal density of the
+approximating model admits the uniform lower bound `m / 2` on every ball `‖y‖ ≤ r`, where
+`m` is the lower bound of `f_y` (B.5) and the convergence of `f_y^{(K)}` to `f_y` is
+`uniform_convergence_fy` at `ε = m / 2`. -/
+theorem fyK_lower_bound (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ) (hfhpdf : IsPdf fh) (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ) (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (r : ℝ) (hr : 0 < r) :
+    ∃ M₁ : ℝ, 0 < M₁ ∧ ∃ N₁ : ℕ, ∀ K ≥ N₁, ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      M₁ ≤ fyPDF n S hS A (fhK K) y := by
+  classical
+  obtain ⟨m, hm, hmin⟩ := fy_min_pos n S hS A hA fh hfhpdf hfhcont r hr
+  obtain ⟨N₁, hN₁⟩ := uniform_convergence_fy n S hS A hA fh
+    (integrable_of_isPdf hfhpdf) fhK (fun K => integrable_of_isPdf (hfhKpdf K)) hconv
+    (m / 2) (by linarith)
+  refine ⟨m / 2, by linarith, N₁, fun K hK y hy => ?_⟩
+  have hΔ := hN₁ K hK y
+  have h2 : fyPDF n S hS A fh y -
+      |fyPDF n S hS A fh y - fyPDF n S hS A (fhK K) y| ≤ fyPDF n S hS A (fhK K) y := by
+    have hw : fyPDF n S hS A fh y - fyPDF n S hS A (fhK K) y
+        ≤ |fyPDF n S hS A fh y - fyPDF n S hS A (fhK K) y| := le_abs_self _
+    linarith
+  have h3 : m - m / 2 ≤ fyPDF n S hS A fh y -
+      |fyPDF n S hS A fh y - fyPDF n S hS A (fhK K) y| := by
+    have h4 : m ≤ fyPDF n S hS A fh y := hmin y hy
+    linarith
+  linarith
+
+set_option linter.unusedVariables false in
+/-- Step B.2 of `plan_main_theorem.md` (generalization of `norm_mul_noiseDens_zero_le`):
+for every `y` the function `h ↦ ‖h‖ · f_n(y − A h)` is bounded by a positive constant
+(depending on `y` through `exp(κ‖y‖²)`). -/
+theorem norm_mul_noiseDens_le (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (y : EuclideanSpace ℝ (Fin n)) :
+    ∃ C : ℝ, 0 < C ∧ ∀ h : EuclideanSpace ℝ (Fin n),
+      ‖h‖ * noiseDens n S hS A y h ≤ C := by
+  classical
+  obtain ⟨κ, c, cS, _, hc, hcS, hdecay⟩ := noiseDens_decay n S hS A hA
+  have hfac : 0 ≤ Real.exp (κ * ‖y‖ ^ 2) := Real.exp_nonneg _
+  refine ⟨cS * Real.exp (κ * ‖y‖ ^ 2) * max 1 c⁻¹,
+    mul_pos (mul_pos hcS (Real.exp_pos _)) (by positivity), ?_⟩
+  intro h
+  have hnorm0 : (0 : ℝ) ≤ ‖h‖ := norm_nonneg _
+  rcases le_or_gt ‖h‖ 1 with h1 | h1
+  · -- small case: `‖h‖ ≤ 1`
+    have hexpNonNeg : 0 ≤ c * ‖h‖ ^ 2 := mul_nonneg hc.le (sq_nonneg _)
+    have he1 : Real.exp (-(c * ‖h‖ ^ 2)) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+    have hprod : ‖h‖ * Real.exp (-(c * ‖h‖ ^ 2)) ≤ 1 :=
+      (mul_le_mul h1 he1 (Real.exp_nonneg _) zero_le_one).trans (by norm_num)
+    calc ‖h‖ * noiseDens n S hS A y h
+        ≤ ‖h‖ * (cS * Real.exp (κ * ‖y‖ ^ 2) * Real.exp (-(c * ‖h‖ ^ 2))) :=
+          mul_le_mul_of_nonneg_left (hdecay y h) hnorm0
+      _ = cS * Real.exp (κ * ‖y‖ ^ 2) * (‖h‖ * Real.exp (-(c * ‖h‖ ^ 2))) := by ring
+      _ ≤ cS * Real.exp (κ * ‖y‖ ^ 2) * max 1 c⁻¹ :=
+          mul_le_mul_of_nonneg_left (hprod.trans (le_max_left (1 : ℝ) c⁻¹))
+            (mul_nonneg hcS.le hfac)
+  · -- large case: `‖h‖ ≥ 1`
+    have hpos : 0 < c * ‖h‖ := mul_pos hc (zero_lt_one.trans h1)
+    have hne : ‖h‖ ≠ 0 := ne_of_gt (zero_lt_one.trans h1)
+    have h1le : (1 : ℝ) ≤ ‖h‖ := h1.le
+    have hge : c * ‖h‖ ≤ c * ‖h‖ ^ 2 := by
+      calc c * ‖h‖ = (c * ‖h‖) * 1 := by ring
+        _ ≤ (c * ‖h‖) * ‖h‖ := mul_le_mul_of_nonneg_left h1le (mul_nonneg hc.le hnorm0)
+        _ = c * ‖h‖ ^ 2 := by ring
+    have hexple : c * ‖h‖ ≤ Real.exp (c * ‖h‖ ^ 2) := by
+      have ha := Real.add_one_le_exp (c * ‖h‖)
+      have hb := Real.exp_monotone hge
+      linarith
+    have hle : Real.exp (-(c * ‖h‖ ^ 2)) ≤ (c * ‖h‖)⁻¹ := by
+      rw [Real.exp_neg]
+      exact (inv_le_inv₀ (Real.exp_pos _) hpos).mpr hexple
+    calc ‖h‖ * noiseDens n S hS A y h
+        ≤ ‖h‖ * (cS * Real.exp (κ * ‖y‖ ^ 2) * Real.exp (-(c * ‖h‖ ^ 2))) :=
+          mul_le_mul_of_nonneg_left (hdecay y h) hnorm0
+      _ = cS * Real.exp (κ * ‖y‖ ^ 2) * (‖h‖ * Real.exp (-(c * ‖h‖ ^ 2))) := by ring
+      _ ≤ cS * Real.exp (κ * ‖y‖ ^ 2) * (‖h‖ * (c * ‖h‖)⁻¹) :=
+          mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hle hnorm0)
+            (mul_nonneg hcS.le hfac)
+      _ = cS * Real.exp (κ * ‖y‖ ^ 2) * c⁻¹ := by
+          rw [_root_.mul_inv_rev, mul_inv_cancel_left₀ hne]
+      _ ≤ cS * Real.exp (κ * ‖y‖ ^ 2) * max 1 c⁻¹ :=
+          mul_le_mul_of_nonneg_left (le_max_right _ _) (mul_nonneg hcS.le hfac)
+
+set_option linter.unusedVariables false in
+/-- Step B.2 of `plan_main_theorem.md` (last part): the `cme` integrand
+`fun h => ((noiseDens n S hS A y h * f h) / f_y(y)) • h` is Bochner integrable for every
+pdf `f` and every `y` (domination by `(C(y) / f_y(y)) • f`, using B.3 `fy_pos` and the
+per-`y` bound `norm_mul_noiseDens_le`). -/
+theorem cme_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (y : EuclideanSpace ℝ (Fin n)) :
+    MeasureTheory.Integrable
+      (fun h : EuclideanSpace ℝ (Fin n) =>
+        ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h) volume := by
+  classical
+  obtain ⟨C, _, hC⟩ := norm_mul_noiseDens_le n S hS A hA y
+  have hfypos : 0 < fyPDF n S hS A f y := fy_pos n S hS A hA f hf y
+  -- measurability of the integrand
+  have hM : MeasureTheory.AEStronglyMeasurable
+      (fun h => ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h) volume := by
+    have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+      have hcomp : noiseDens n S hS A y
+          = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+            (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+        funext h
+        exact noiseDens_eq n S hS A y h
+      rw [hcomp]
+      exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+        (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+          y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+    have hprod : AEMeasurable (fun h => noiseDens n S hS A y h * f h) volume :=
+      hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)
+    have hsM : AEMeasurable
+        (fun h => (noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) volume := by
+      have h1 : AEMeasurable
+          (fun h => (1 / fyPDF n S hS A f y) * (noiseDens n S hS A y h * f h)) volume :=
+        hprod.const_mul (1 / fyPDF n S hS A f y)
+      have h2 : (fun h => (noiseDens n S hS A y h * f h) / fyPDF n S hS A f y)
+          = fun h => (1 / fyPDF n S hS A f y) * (noiseDens n S hS A y h * f h) := by
+        funext h
+        ring
+      rw [h2]
+      exact h1
+    exact (hsM.smul (measurable_id.aemeasurable)).aestronglyMeasurable
+  -- domination by `(C / f_y) • f`
+  have hgint : MeasureTheory.Integrable
+      (fun h => (C / fyPDF n S hS A f y) * f h) volume :=
+    MeasureTheory.Integrable.smul (C / fyPDF n S hS A f y) (integrable_of_isPdf hf)
+  refine MeasureTheory.Integrable.mono' hgint hM
+    (Filter.Eventually.of_forall fun h => ?_)
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  have hsnd : 0 ≤ noiseDens n S hS A y h := by
+    simp only [noiseDens]
+    rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+  rw [norm_smul, Real.norm_eq_abs,
+    abs_eq_self.mpr (div_nonneg (mul_nonneg hsnd (hf.1 h)) hfypos.le)]
+  have h1 : (noiseDens n S hS A y h * f h) / fyPDF n S hS A f y * ‖h‖
+      = (‖h‖ * noiseDens n S hS A y h) * (f h / fyPDF n S hS A f y) := by ring
+  rw [h1]
+  have h2 : (C / fyPDF n S hS A f y) * f h
+      = C * (f h / fyPDF n S hS A f y) := by ring
+  rw [h2]
+  exact mul_le_mul_of_nonneg_right (hC h) (div_nonneg (hf.1 h) hfypos.le)
+
+set_option linter.unusedVariables false in
+/-- Step B.2 auxiliary: the posterior-moment integrand `fun h => (f_n(y − A h) f(h)) • h`
+is Bochner integrable (domination by `C(y) · f`, using `norm_mul_noiseDens_le`). -/
+theorem posterior_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (y : EuclideanSpace ℝ (Fin n)) :
+    MeasureTheory.Integrable
+      (fun h => (noiseDens n S hS A y h * f h) • h) volume := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  obtain ⟨C, _, hC⟩ := norm_mul_noiseDens_le n S hS A hA y
+  have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+    have hcomp : noiseDens n S hS A y
+        = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+          (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+      funext h
+      exact noiseDens_eq n S hS A y h
+    rw [hcomp]
+    exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+      (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+        y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+  have hprodM : MeasureTheory.AEStronglyMeasurable
+      (fun h => noiseDens n S hS A y h * f h) volume :=
+    (hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)).aestronglyMeasurable
+  have hvecM : MeasureTheory.AEStronglyMeasurable
+      (fun h => (noiseDens n S hS A y h * f h) • h) volume :=
+    hprodM.smul aestronglyMeasurable_id
+  have hgint : MeasureTheory.Integrable (fun h => C * f h) volume :=
+    MeasureTheory.Integrable.smul C (integrable_of_isPdf hf)
+  refine MeasureTheory.Integrable.mono' hgint hvecM
+    (Filter.Eventually.of_forall fun h => ?_)
+  have hsnd : 0 ≤ noiseDens n S hS A y h := by
+    simp only [noiseDens]
+    rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+  calc ‖(noiseDens n S hS A y h * f h) • h‖
+      = ‖noiseDens n S hS A y h * f h‖ * ‖h‖ := by rw [norm_smul]
+    _ = noiseDens n S hS A y h * f h * ‖h‖ := by
+        rw [norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+          abs_eq_self.mpr hsnd, abs_eq_self.mpr (hf.1 h)]
+    _ = (‖h‖ * noiseDens n S hS A y h) * f h := by ring
+    _ ≤ C * f h := mul_le_mul_of_nonneg_right (hC h) (hf.1 h)
+
+set_option linter.unusedVariables false in
+/-- Step B.2 auxiliary: the integrand `fun h => (f_n(y − A h) (fK − f)(h)) • h` is Bochner
+integrable (domination by `C(y) · (fK + f)`, using `norm_mul_noiseDens_le` and the triangle
+bound `|fK − f| ≤ fK + f` for nonnegative pdfs). -/
+theorem posterior_diff_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin n)) :
+    MeasureTheory.Integrable
+      (fun h => (noiseDens n S hS A y h * (fK h - f h)) • h) volume := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  obtain ⟨C, _, hC⟩ := norm_mul_noiseDens_le n S hS A hA y
+  have hndM : AEMeasurable (noiseDens n S hS A y) volume := by
+    have hcomp : noiseDens n S hS A y
+        = (fun x => multivariateGaussianPDF n (0 : Fin n → ℝ) S hS x) ∘
+          (fun h => y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h) := by
+      funext h
+      exact noiseDens_eq n S hS A y h
+    rw [hcomp]
+    exact ((measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS).comp
+      (by fun_prop : Measurable (fun h : EuclideanSpace ℝ (Fin n) =>
+        y + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • A)) h))).aemeasurable
+  have hdiffM : AEMeasurable
+      (fun h => noiseDens n S hS A y h * (fK h - f h)) volume := by
+    have h1 : (fun h => noiseDens n S hS A y h * (fK h - f h))
+        = (fun h => noiseDens n S hS A y h * fK h)
+          - (fun h => noiseDens n S hS A y h * f h) := by
+      funext h
+      rw [Pi.sub_apply, mul_sub]
+    rw [h1]
+    exact (hndM.mul ((integrable_of_isPdf hfK).aestronglyMeasurable.aemeasurable)).sub
+      (hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable))
+  have hvecM : MeasureTheory.AEStronglyMeasurable
+      (fun h => (noiseDens n S hS A y h * (fK h - f h)) • h) volume :=
+    (hdiffM.smul (measurable_id.aemeasurable)).aestronglyMeasurable
+  have hgint : MeasureTheory.Integrable (fun h => C * (fK h + f h)) volume :=
+    (MeasureTheory.Integrable.smul C
+      ((integrable_of_isPdf hfK).add (integrable_of_isPdf hf))).congr
+      (Filter.Eventually.of_forall fun h => by simp)
+  refine MeasureTheory.Integrable.mono' hgint hvecM
+    (Filter.Eventually.of_forall fun h => ?_)
+  have hsnd : 0 ≤ noiseDens n S hS A y h := by
+    simp only [noiseDens]
+    rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+    exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+  have hFK : (0 : ℝ) ≤ fK h := hfK.1 h
+  have hF : (0 : ℝ) ≤ f h := hf.1 h
+  have hsub : |fK h - f h| ≤ fK h + f h := by
+    rw [abs_le]
+    constructor
+    · linarith
+    · linarith
+  calc ‖(noiseDens n S hS A y h * (fK h - f h)) • h‖
+      = ‖noiseDens n S hS A y h * (fK h - f h)‖ * ‖h‖ := by rw [norm_smul]
+    _ = noiseDens n S hS A y h * |fK h - f h| * ‖h‖ := by
+        rw [norm_mul, Real.norm_eq_abs, abs_eq_self.mpr hsnd, Real.norm_eq_abs]
+    _ ≤ noiseDens n S hS A y h * (fK h + f h) * ‖h‖ :=
+        mul_le_mul_of_nonneg_right
+          (mul_le_mul_of_nonneg_left hsub hsnd) (norm_nonneg _)
+    _ = (‖h‖ * noiseDens n S hS A y h) * (fK h + f h) := by ring
+    _ ≤ C * (fK h + f h) :=
+        mul_le_mul_of_nonneg_right (hC h) (add_nonneg (hfK.1 h) (hf.1 h))
+
+set_option linter.unusedVariables false in
+/-- Step C.1 of `plan_main_theorem.md`: the two-term decomposition of the `cme` difference:
+for pdfs `f`, `fK` and `f_y^{(K)}(y) ≠ 0 ≠ f_y(y)`,
+
+`cme(fK) − cme(f) = (1/f_y^{(K)}(y)) • ∫ h, (f_n(y−Ah) (fK − f)(h)) • h`
+`  + ((f_y(y) − f_y^{(K)}(y))/(f_y^{(K)}(y) f_y(y))) • ∫ h, (f_n(y−Ah) f(h)) • h`. -/
+theorem cme_decomp (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin n))
+    (hfyK : fyPDF n S hS A fK y ≠ 0) (hfy : fyPDF n S hS A f y ≠ 0) :
+    cme n S hS A fK y - cme n S hS A f y
+      = (1 / fyPDF n S hS A fK y) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume
+        + ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+            / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * f h) • h ∂volume := by
+  classical
+  obtain ⟨C, _, hC⟩ := norm_mul_noiseDens_le n S hS A hA y
+  -- integrability of the two `cme` integrands
+  have hI1 : MeasureTheory.Integrable
+      (fun h => ((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h) volume :=
+    cme_integrable n S hS A hA fK hfK y
+  have hI2 : MeasureTheory.Integrable
+      (fun h => ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h) volume :=
+    cme_integrable n S hS A hA f hf y
+  -- integrability of the two summand integrands
+  have hIa := posterior_diff_integrable n S hS A hA f hf fK hfK y
+  have hIb := posterior_integrable n S hS A hA f hf y
+  -- the difference-of-integrals identity (`MeasureTheory.integral_sub`)
+  have hstep1 : ∫ h : EuclideanSpace ℝ (Fin n),
+          (((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h
+            - ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h) ∂volume
+      = ∫ h : EuclideanSpace ℝ (Fin n),
+        ((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h ∂volume
+      - ∫ h : EuclideanSpace ℝ (Fin n),
+        ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h ∂volume :=
+    MeasureTheory.integral_sub hI1 hI2
+  calc cme n S hS A fK y - cme n S hS A f y
+      = ∫ h : EuclideanSpace ℝ (Fin n),
+          ((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h ∂volume
+        - ∫ h : EuclideanSpace ℝ (Fin n),
+          ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h ∂volume := by
+        unfold cme
+        rfl
+    _ = ∫ h : EuclideanSpace ℝ (Fin n),
+          (((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h
+            - ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h) ∂volume := hstep1.symm
+    _ = ∫ h : EuclideanSpace ℝ (Fin n),
+          ((1 / fyPDF n S hS A fK y) •
+              ((noiseDens n S hS A y h * (fK h - f h)) • h)
+            + ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+                / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+              ((noiseDens n S hS A y h * f h) • h)) ∂volume := by
+        refine integral_congr_ae (Filter.Eventually.of_forall fun h => ?_)
+        show ((noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y) • h
+            - ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h
+          = (1 / fyPDF n S hS A fK y) •
+              ((noiseDens n S hS A y h * (fK h - f h)) • h)
+            + ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+                / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+              ((noiseDens n S hS A y h * f h) • h)
+        have hscal : (noiseDens n S hS A y h * fK h) / fyPDF n S hS A fK y
+            - (noiseDens n S hS A y h * f h) / fyPDF n S hS A f y
+            = (1 / fyPDF n S hS A fK y) * (noiseDens n S hS A y h * (fK h - f h))
+              + ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+                  / (fyPDF n S hS A fK y * fyPDF n S hS A f y))
+                * (noiseDens n S hS A y h * f h) := by
+          field_simp
+          ring
+        rw [← sub_smul, hscal, add_smul, ← smul_assoc, ← smul_assoc, smul_eq_mul,
+          smul_eq_mul]
+    _ = (1 / fyPDF n S hS A fK y) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume
+        + ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+            / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * f h) • h ∂volume := by
+        have hIa' : MeasureTheory.Integrable
+            (fun h => (1 / fyPDF n S hS A fK y) •
+              ((noiseDens n S hS A y h * (fK h - f h)) • h)) volume :=
+          (MeasureTheory.Integrable.smul (1 / fyPDF n S hS A fK y) hIa).congr
+            (Filter.Eventually.of_forall fun h => by simp)
+        have hIb' : MeasureTheory.Integrable
+            (fun h => ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+              / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+              ((noiseDens n S hS A y h * f h) • h)) volume :=
+          (MeasureTheory.Integrable.smul ((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+              / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) hIb).congr
+            (Filter.Eventually.of_forall fun h => by simp)
+        rw [integral_add hIa' hIb', integral_smul _ _, integral_smul _ _]
+
+set_option linter.unusedVariables false in
+/-- Step C.2 of `plan_main_theorem.md` (first rate): if `f_y^{(K)}(y) ≠ 0` and the sup-norm
+bound `|f_h^{(K)} − f_h| ≤ ε` holds everywhere, then the first summand of `cme_decomp` is
+bounded by `(1/f_y^{(K)}(y)) · ε · ∫ ‖h‖ f_n(y − A h) dh` (the last factor is bounded
+uniformly on balls by Step A.1 `noiseDens_moment_uniform`). -/
+theorem cme_rate_T1 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin n)) (hfyK : fyPDF n S hS A fK y ≠ 0)
+    (ε : ℝ) (hε : 0 < ε) (hδ : ∀ x, |fK x - f x| ≤ ε) :
+    ‖(1 / fyPDF n S hS A fK y) •
+        ∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume‖
+      ≤ (1 / fyPDF n S hS A fK y) * ε *
+        ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume := by
+  classical
+  have hIa := posterior_diff_integrable n S hS A hA f hf fK hfK y
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  have hfyKpos : 0 < fyPDF n S hS A fK y := fy_pos n S hS A hA fK hfK y
+  have hscal : 0 ≤ 1 / fyPDF n S hS A fK y := le_of_lt (div_pos one_pos hfyKpos)
+  have hint : MeasureTheory.Integrable
+      (fun h => ε * (‖h‖ * noiseDens n S hS A y h)) volume := by
+    have h2 : MeasureTheory.Integrable
+        (fun h => ‖h‖ * noiseDens n S hS A y h) volume := by
+      simpa only [noiseDens] using integral_gaussian_bounded n S hS A hA y
+    exact (MeasureTheory.Integrable.smul ε h2).congr
+      (Filter.Eventually.of_forall fun h => by simp)
+  have hpt : ∀ h : EuclideanSpace ℝ (Fin n),
+      ‖(noiseDens n S hS A y h * (fK h - f h)) • h‖
+      ≤ ε * (‖h‖ * noiseDens n S hS A y h) := by
+    intro h
+    have hsnd : 0 ≤ noiseDens n S hS A y h := by
+      simp only [noiseDens]
+      rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+      exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le)) (Real.exp_nonneg _)
+    calc ‖(noiseDens n S hS A y h * (fK h - f h)) • h‖
+        = ‖noiseDens n S hS A y h * (fK h - f h)‖ * ‖h‖ := by rw [norm_smul]
+      _ = noiseDens n S hS A y h * |fK h - f h| * ‖h‖ := by
+          rw [norm_mul, Real.norm_eq_abs, abs_eq_self.mpr hsnd, Real.norm_eq_abs]
+      _ ≤ noiseDens n S hS A y h * ε * ‖h‖ :=
+          mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left (hδ h) hsnd)
+            (norm_nonneg _)
+      _ = ε * (‖h‖ * noiseDens n S hS A y h) := by ring
+  calc ‖(1 / fyPDF n S hS A fK y) •
+      ∫ h : EuclideanSpace ℝ (Fin n),
+        (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume‖
+      = (1 / fyPDF n S hS A fK y) *
+        ‖∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume‖ := by
+        rw [norm_smul, Real.norm_eq_abs, abs_eq_self.mpr hscal]
+    _ ≤ (1 / fyPDF n S hS A fK y) *
+        ∫ h : EuclideanSpace ℝ (Fin n),
+          ‖(noiseDens n S hS A y h * (fK h - f h)) • h‖ ∂volume :=
+        mul_le_mul_of_nonneg_left
+          (norm_integral_le_integral_norm
+            (fun h => (noiseDens n S hS A y h * (fK h - f h)) • h)) hscal
+    _ ≤ (1 / fyPDF n S hS A fK y) *
+        (ε * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume) := by
+        refine mul_le_mul_of_nonneg_left ?_ hscal
+        refine le_trans
+          (integral_mono_of_nonneg
+            (Filter.Eventually.of_forall fun h => norm_nonneg _) hint
+            (Filter.Eventually.of_forall hpt)) ?_
+        rw [integral_const_mul]
+    _ = (1 / fyPDF n S hS A fK y) * ε *
+        ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume := by
+        ring
+
+set_option linter.unusedVariables false in
+/-- Step C.2 of `plan_main_theorem.md` (second rate): if `f_y^{(K)}(y) ≠ 0` and
+`|f_y(y) − f_y^{(K)}(y)| ≤ ε` then the second summand of `cme_decomp` is bounded by
+`(ε/(f_y^{(K)}(y) f_y(y))) · ‖J(y)‖` (Step D bounds `‖J(y)‖` via
+`posterior_moment_bound`). -/
+theorem cme_rate_T2 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin n)) (hfyK : fyPDF n S hS A fK y ≠ 0)
+    (ε : ℝ) (hδ : |fyPDF n S hS A f y - fyPDF n S hS A fK y| ≤ ε) :
+    ‖((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+        / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+      ∫ h : EuclideanSpace ℝ (Fin n),
+        (noiseDens n S hS A y h * f h) • h ∂volume‖
+      ≤ (ε / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) *
+        ‖∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * f h) • h ∂volume‖ := by
+  classical
+  have hfyKpos : 0 < fyPDF n S hS A fK y := fy_pos n S hS A hA fK hfK y
+  have hfypos : 0 < fyPDF n S hS A f y := fy_pos n S hS A hA f hf y
+  have hpos : 0 < fyPDF n S hS A fK y * fyPDF n S hS A f y :=
+    mul_pos hfyKpos hfypos
+  calc ‖((fyPDF n S hS A f y - fyPDF n S hS A fK y)
+      / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
+    ∫ h : EuclideanSpace ℝ (Fin n),
+      (noiseDens n S hS A y h * f h) • h ∂volume‖
+      = |fyPDF n S hS A f y - fyPDF n S hS A fK y| /
+        (fyPDF n S hS A fK y * fyPDF n S hS A f y) *
+        ‖∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * f h) • h ∂volume‖ := by
+        rw [norm_smul, Real.norm_eq_abs, abs_div, abs_of_pos hpos]
+    _ ≤ ε / (fyPDF n S hS A fK y * fyPDF n S hS A f y) *
+        ‖∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * f h) • h ∂volume‖ := by
+        refine mul_le_mul_of_nonneg_right ?_ (norm_nonneg _)
+        rw [div_le_iff₀ hpos, div_mul_cancel₀ _ hpos.ne']
+        exact hδ
+
+set_option linter.unusedVariables false in
+/-- **Main result** (appendix_1.tex, `thm:main_result`): with `f_h` a continuous pdf,
+`f_n = N(0, Σ)` the Gaussian noise density, `A` invertible, and `f_h^{(K)}` a sequence of
+continuous pdfs converging uniformly to `f_h`, the conditional mean estimates
+`ĥ^{(K)}(y) = ∫ h f_n(y - A h) f_h^{(K)}(h) / f_y^{(K)}(y) dh` converge to
+`ĥ(y) = ∫ h f_n(y - A h) f_h(h) / f_y(y) dh` *uniformly on every closed ball*
+`B_r = {y : ‖y‖ ≤ r}`, `r > 0` — phrased as the `ℝ≥0∞`-supremum of the norm differences
+over the ball tending to `0`.
+
+The pointwise convergence of Eq. (pointwise_convergence) is the easy consequence
+`cme_pointwise_convergence` below. -/
+theorem main_theorem
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
+    ∀ r : ℝ, 0 < r →
+      Tendsto (fun K => ⨆ y ∈ Metric.closedBall 0 r,
+          ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  classical
+  intro r hr
+  -- the constants from Steps A/B
+  obtain ⟨m, hm, hmin⟩ := fy_min_pos n S hS A hA fh hfhpdf hfhcont r hr
+  obtain ⟨M₁, hM₁pos, N₁, hM₁⟩ := fyK_lower_bound n S hS A hA fh hfhpdf hfhcont fhK
+    hfhKpdf hconv r hr
+  obtain ⟨C, hC⟩ := noiseDens_moment_uniform n S hS A hA r hr
+  obtain ⟨D, hD⟩ := posterior_moment_bound n S hS A hA fh hfhpdf r hr
+  -- the positive envelopes `C'`, `D'`
+  have hC'pos : 0 < max C 1 := lt_of_lt_of_le zero_lt_one (le_max_right _ _)
+  have hD'pos : 0 < max D 1 := lt_of_lt_of_le zero_lt_one (le_max_right _ _)
+  have hCle : ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      (∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume) ≤ max C 1 :=
+    fun y hy => le_trans (hC y hy) (le_max_left _ _)
+  have hDle : ∀ y : EuclideanSpace ℝ (Fin n), ‖y‖ ≤ r →
+      ‖∫ h : EuclideanSpace ℝ (Fin n), (noiseDens n S hS A y h * fh h) • h ∂volume‖
+        ≤ max D 1 := fun y hy => le_trans (hD y hy) (le_max_left _ _)
+  -- reduce the limit to the `Iio`-basis of `nhds 0` in `ℝ≥0∞`
+  show Tendsto (fun K => ⨆ y ∈ Metric.closedBall 0 r,
+      ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop
+    (𝓝 (⊥ : ℝ≥0∞))
+  rw [nhds_bot_basis.tendsto_right_iff]
+  -- the uniform machinery: for each `ε > 0`, eventually the sup is at most `ofReal ε`
+  have hmach : ∀ ε > 0, ∀ᶠ K in atTop,
+      ⨆ y ∈ Metric.closedBall 0 r,
+        ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖
+        ≤ ENNReal.ofReal ε := by
+    intro ε hε
+    have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+    have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+    obtain ⟨K₀₁, hK₀₁⟩ := hconv (M₁ * ε / (2 * max C 1))
+      (div_pos (mul_pos hM₁pos hε) (by positivity))
+    obtain ⟨K₀₂, hK₀₂⟩ := uniform_convergence_fy n S hS A hA fh
+      (integrable_of_isPdf hfhpdf) fhK (fun K => integrable_of_isPdf (hfhKpdf K)) hconv
+      (M₁ * m * ε / (2 * max D 1))
+      (div_pos (mul_pos (mul_pos hM₁pos hm) hε) (by positivity))
+    filter_upwards [Filter.eventually_ge_atTop (max (max K₀₁ K₀₂) N₁)] with K hK
+    have hK₁ : K ≥ K₀₁ := le_trans (le_max_left _ _) (le_trans (le_max_left _ _) hK)
+    have hK₂ : K ≥ K₀₂ := le_trans (le_max_right _ _) (le_trans (le_max_left _ _) hK)
+    have hN₁ : K ≥ N₁ := le_trans (le_max_right _ _) hK
+    refine iSup₂_le fun y hy => ?_
+    have hy' : ‖y‖ ≤ r := by
+      rw [Metric.mem_closedBall, dist_eq_norm, sub_zero] at hy
+      exact hy
+    have hfyKpos : 0 < fyPDF n S hS A (fhK K) y := lt_of_lt_of_le hM₁pos (hM₁ K hN₁ y hy')
+    have hfypos : 0 < fyPDF n S hS A fh y := lt_of_lt_of_le hm (hmin y hy')
+    have hfyKne : fyPDF n S hS A (fhK K) y ≠ 0 := ne_of_gt hfyKpos
+    have hfyne : fyPDF n S hS A fh y ≠ 0 := ne_of_gt hfypos
+    -- the two accuracy thresholds
+    set δ₁ : ℝ := M₁ * ε / (2 * max C 1) with hδ₁def
+    set δ₂ : ℝ := M₁ * m * ε / (2 * max D 1) with hδ₂def
+    have hδ₁pos : 0 < δ₁ := div_pos (mul_pos hM₁pos hε) (by positivity)
+    have hδ₂pos : 0 < δ₂ := div_pos (mul_pos (mul_pos hM₁pos hm) hε) (by positivity)
+    have hconv1 := hK₀₁ K hK₁
+    have hconv2 := hK₀₂ K hK₂
+    -- the `T₁` rate
+    have hT1 : ‖(1 / fyPDF n S hS A (fhK K) y) •
+        ∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDens n S hS A y h * ((fhK K) h - fh h)) • h ∂volume‖
+      ≤ (1 / M₁) * δ₁ * max C 1 := by
+      refine le_trans (cme_rate_T1 n S hS A hA fh hfhpdf (fhK K) (hfhKpdf K) y hfyKne
+        δ₁ hδ₁pos (fun x => by
+          rw [abs_sub_comm]
+          exact le_of_lt (hconv1 x))) ?_
+      have hfac2 : 0 ≤ (1 / M₁) * δ₁ :=
+        mul_nonneg (le_of_lt (div_pos one_pos hM₁pos)) hδ₁pos.le
+      calc (1 / fyPDF n S hS A (fhK K) y) * δ₁ *
+          (∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume)
+        ≤ (1 / M₁) * δ₁ *
+          (∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_right
+              ((div_le_div_iff_of_pos_left zero_lt_one hfyKpos hM₁pos).mpr
+                (hM₁ K hN₁ y hy')) hδ₁pos.le)
+            (MeasureTheory.integral_nonneg fun h =>
+              mul_nonneg (norm_nonneg _) (by
+                simp only [noiseDens]
+                rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+                  (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))]
+                exact mul_nonneg (inv_nonneg.mpr (mul_nonneg h2pi.le hSqrtpos.le))
+                  (Real.exp_nonneg _)))
+      _ ≤ (1 / M₁) * δ₁ * max C 1 :=
+          mul_le_mul_of_nonneg_left (hCle y hy') hfac2
+    -- the `T₂` rate
+    have hT2 : ‖((fyPDF n S hS A fh y - fyPDF n S hS A (fhK K) y)
+        / (fyPDF n S hS A (fhK K) y * fyPDF n S hS A fh y)) •
+      ∫ h : EuclideanSpace ℝ (Fin n),
+        (noiseDens n S hS A y h * fh h) • h ∂volume‖
+      ≤ (δ₂ / (M₁ * m)) * max D 1 := by
+      refine le_trans (cme_rate_T2 n S hS A hA fh hfhpdf (fhK K) (hfhKpdf K) y hfyKne
+        δ₂ (le_of_lt (hconv2 y))) ?_
+      have hBle : M₁ * m ≤ fyPDF n S hS A (fhK K) y * fyPDF n S hS A fh y :=
+        mul_le_mul (hM₁ K hN₁ y hy') (hmin y hy') hm.le hfyKpos.le
+      have hBpos : 0 < fyPDF n S hS A (fhK K) y * fyPDF n S hS A fh y :=
+        mul_pos hfyKpos hfypos
+      calc (δ₂ / (fyPDF n S hS A (fhK K) y * fyPDF n S hS A fh y)) *
+          ‖∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * fh h) • h ∂volume‖
+        ≤ (δ₂ / (M₁ * m)) *
+          ‖∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDens n S hS A y h * fh h) • h ∂volume‖ :=
+            mul_le_mul_of_nonneg_right
+              ((div_le_div_iff_of_pos_left hδ₂pos (mul_pos hfyKpos hfypos)
+                (mul_pos hM₁pos hm)).mpr hBle) (norm_nonneg _)
+      _ ≤ (δ₂ / (M₁ * m)) * max D 1 :=
+          mul_le_mul_of_nonneg_left (hDle y hy')
+            (div_nonneg hδ₂pos.le (le_of_lt (mul_pos hM₁pos hm)))
+    -- the field algebra of the thresholds
+    have hval1 : (1 / M₁) * δ₁ * max C 1 = ε / 2 := by
+      rw [hδ₁def]; field_simp
+    have hval2 : (δ₂ / (M₁ * m)) * max D 1 = ε / 2 := by
+      rw [hδ₂def]; field_simp
+    -- the decomposition and the final bound
+    have hdec := cme_decomp n S hS A hA fh hfhpdf (fhK K) (hfhKpdf K) y hfyKne hfyne
+    have hnormle : ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖ ≤ ε := by
+      rw [norm_sub_rev, hdec]
+      exact le_trans (norm_add_le _ _)
+        (by linarith [hT1, hT2, hval1, hval2])
+    exact ENNReal.ofReal_le_ofReal hnormle
+  -- conclude via the `Iio`-basis of `nhds 0`
+  intro a ha
+  by_cases htop : a = ⊤
+  · subst htop
+    refine Filter.Eventually.mono (hmach 1 one_pos) fun K hK =>
+      Set.mem_Iio.2 (lt_of_le_of_lt hK ENNReal.ofReal_lt_top)
+  · have hε : 0 < a.toReal := ENNReal.toReal_pos (ne_of_gt ha) htop
+    refine Filter.Eventually.mono (hmach (a.toReal / 2) (div_pos hε two_pos)) fun K hK =>
+      Set.mem_Iio.2 (lt_of_le_of_lt hK
+        ((ENNReal.ofReal_lt_iff_lt_toReal (by linarith) htop).mpr
+          (div_lt_self hε one_lt_two)))
+
+
+/-- Pointwise convergence of the conditional mean estimates (appendix_1.tex, Eq.
+(pointwise_convergence) of `thm:main_result`): an immediate consequence of
+`main_theorem`, since every point lies in some sufficiently large ball. -/
+theorem cme_pointwise_convergence
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (y : EuclideanSpace ℝ (Fin n)) :
+    Tendsto (fun K => ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  have hr : 0 < ‖y‖ + 1 := by linarith [norm_nonneg y]
+  have hmem : y ∈ Metric.closedBall 0 (‖y‖ + 1) :=
+    Metric.mem_closedBall'.2 (by
+      rw [dist_eq_norm, zero_sub, norm_neg]
+      linarith [norm_nonneg y])
+  have hsup := main_theorem n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv
+    (‖y‖ + 1) hr
+  have h0 : Tendsto (fun K => ENNReal.ofReal
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) :=
+    tendsto_of_tendsto_of_tendsto_of_le_of_le (g := fun _ : ℕ => (0 : ℝ≥0∞))
+      tendsto_const_nhds hsup (fun _ => zero_le)
+      (fun K => le_iSup₂_of_le y hmem (le_refl _))
+  have h1 : Tendsto (fun K => ENNReal.toReal (ENNReal.ofReal
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖)) atTop (nhds 0) :=
+    (ENNReal.continuousAt_toReal (x := (0 : ℝ≥0∞)) (by simp)).tendsto.comp h0
+  exact Tendsto.congr' (Filter.Eventually.of_forall fun K => by simp) h1
+
