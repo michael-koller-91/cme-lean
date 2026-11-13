@@ -2216,3 +2216,214 @@ theorem posDef_quadForm_ge (n : ℕ) (M : Matrix (Fin n) (Fin n) ℝ) (hM : M.Po
           (sq_le_sq₀ (mul_nonneg (inv_nonneg.mpr (le_of_lt hKpos)) (norm_nonneg _))
             (norm_nonneg _)).mpr hbound
       _ = (M *ᵥ v) ⬝ᵥ v := hmove.symm
+/-- Quantitative Gaussian domination (Step B.1 of `plan_main_theorem.md`): the noise density
+along `y − A·` decays like a Gaussian in `‖h‖`, with an `exp(κ‖y‖²)` factor; all constants
+depend only on `S` and `A`. -/
+theorem noiseDens_decay (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) :
+    ∃ κ c cS : ℝ, 0 < κ ∧ 0 < c ∧ 0 < cS ∧
+      ∀ (y h : EuclideanSpace ℝ (Fin n)),
+        noiseDens n S hS A y h
+          ≤ cS * Real.exp (κ * ‖y‖ ^ 2) * Real.exp (-(c * ‖h‖ ^ 2)) := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
+  have hSdetpos : 0 < S.det := hS.det_pos
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hSdetpos
+  have hSdet : IsUnit S.det := isUnit_iff_ne_zero.mpr (ne_of_gt hSdetpos)
+  have hSU : IsUnit (S : Matrix (Fin n) (Fin n) ℝ) := (Matrix.isUnit_iff_isUnit_det S).mpr hSdet
+  have hSinvU : IsUnit (S⁻¹ : Matrix (Fin n) (Fin n) ℝ) := Matrix.isUnit_nonsing_inv_iff.mpr hSU
+  -- the operator norm of the mulVec of `A⁻¹`
+  set L : EuclideanSpace ℝ (Fin n) →L[ℝ] EuclideanSpace ℝ (Fin n) :=
+    Matrix.toEuclideanCLM (𝕜 := ℝ) (n := Fin n) A⁻¹ with hLdef
+  have hLapply : ∀ x : EuclideanSpace ℝ (Fin n),
+      (L x).ofLp = A⁻¹ *ᵥ x.ofLp := fun x => Matrix.ofLp_toEuclideanCLM A⁻¹ x
+  have hAinv : ∀ u : Fin n → ℝ, A⁻¹ *ᵥ (A *ᵥ u) = u := by
+    intro u
+    rw [Matrix.mulVec_mulVec, Matrix.nonsing_inv_mul A hA, Matrix.one_mulVec]
+  have h1 : ∀ v : Fin n → ℝ,
+      (WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n)) = L (WithLp.toLp 2 (A *ᵥ v)) := by
+    intro v
+    apply WithLp.ofLp_injective
+    rw [WithLp.ofLp_toLp, hLapply (WithLp.toLp 2 (A *ᵥ v)), WithLp.ofLp_toLp]
+    exact (hAinv v).symm
+  set K : ℝ := ‖L‖ with hKdef
+  by_cases hK0 : K = 0
+  · -- trivial space (n = 0): all norms vanish
+    refine ⟨1, 1, ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹,
+      one_pos, one_pos, inv_pos.mpr (mul_pos h2pi hSqrtpos), ?_⟩
+    intro y h
+    have hnorm0y : ‖y‖ = 0 := by
+      have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (A *ᵥ (y : Fin n → ℝ)))
+      rw [← h1 (y : Fin n → ℝ), ← hKdef, hK0, zero_mul] at h2
+      exact le_antisymm h2 (norm_nonneg _)
+    have hnorm0h : ‖h‖ = 0 := by
+      have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (A *ᵥ (h : Fin n → ℝ)))
+      rw [← h1 (h : Fin n → ℝ), ← hKdef, hK0, zero_mul] at h2
+      exact le_antisymm h2 (norm_nonneg _)
+    rw [show (y : EuclideanSpace ℝ (Fin n)) = WithLp.toLp 2 ((y : Fin n → ℝ)) from rfl,
+      hnorm0y, show (h : EuclideanSpace ℝ (Fin n)) = WithLp.toLp 2 ((h : Fin n → ℝ)) from rfl,
+      hnorm0h]
+    simp only [mul_zero, zero_pow two_ne_zero, Real.exp_zero, mul_one, neg_zero]
+    simp only [noiseDens]
+    exact multivariateGaussianPDF_le_const n (0 : Fin n → ℝ) S hS
+      (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+  · have hKpos : 0 < K := by
+      refine norm_pos_iff.mpr ?_
+      intro hL0
+      exact hK0 (by rw [hKdef, hL0]; exact norm_zero)
+    have hAge : ∀ v : Fin n → ℝ, K⁻¹ * ‖(WithLp.toLp 2 v : EuclideanSpace ℝ (Fin n))‖
+        ≤ ‖(WithLp.toLp 2 (A *ᵥ v) : EuclideanSpace ℝ (Fin n))‖ := by
+      intro v
+      have h2 := ContinuousLinearMap.le_opNorm L (WithLp.toLp 2 (A *ᵥ v))
+      rw [← h1 v, ← hKdef] at h2
+      have h3 := mul_le_mul_of_nonneg_left h2 (inv_nonneg.mpr (le_of_lt hKpos))
+      rwa [← mul_assoc, inv_mul_cancel₀ hK0, one_mul] at h3
+    -- `S⁻¹` is positive definite
+    have hSH : S.IsHermitian := hS.1
+    have hST : Sᵀ = S := by
+      ext i j
+      simpa using hSH.apply i j
+    have hSinvH : S⁻¹.IsHermitian := by
+      have h1 : S⁻¹ᵀ = S⁻¹ := by rw [← transpose_nonsing_inv S hSdet, hST]
+      exact Matrix.ext (fun i j => by
+        simpa using (congrArg (fun M : Matrix (Fin n) (Fin n) ℝ => M j i) h1).symm)
+    have hSinvPD : S⁻¹.PosDef := by
+      refine Matrix.posDef_iff_posSemidef_and_mulVec_injective.mpr ⟨?_,
+        mulVec_injective_of_isUnit hSinvU⟩
+      refine Matrix.PosSemidef.of_dotProduct_mulVec_nonneg hSinvH ?_
+      intro u
+      have h := Matrix.PosSemidef.dotProduct_mulVec_nonneg hS.posSemidef (S⁻¹ *ᵥ u)
+      rw [Matrix.mulVec_mulVec, Matrix.mul_nonsing_inv S hSdet, Matrix.one_mulVec] at h
+      simpa [dotProduct_comm] using h
+    obtain ⟨lamS, hlamS, hquadS⟩ := posDef_quadForm_ge n S⁻¹ hSinvPD
+    refine ⟨lamS / 2, lamS / (4 * K * K),
+      ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹,
+      div_pos hlamS two_pos,
+      div_pos hlamS (mul_pos (mul_pos (by norm_num : (0 : ℝ) < 4) hKpos) hKpos),
+      inv_pos.mpr (mul_pos h2pi hSqrtpos), ?_⟩
+    intro y h
+    -- the explicit form of the noise density
+    have hform : noiseDens n S hS A y h
+        = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt S.det)⁻¹
+          * Real.exp (-(((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+            ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2)) := by
+      simp only [noiseDens]
+      rw [multivariateGaussianPDF_eq n (0 : Fin n → ℝ) S hS
+        (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))),
+        WithLp.ofLp_toLp, sub_zero]
+    -- the reverse triangle: `|K⁻¹‖h‖ − ‖y‖| ≤ ‖y − A·h‖`
+    have h1' : (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+        = y - (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+          : EuclideanSpace ℝ (Fin n)) := by
+      rw [WithLp.toLp_sub, WithLp.toLp_ofLp, WithLp.toLp_ofLp, sub_sub_cancel]
+    have htri1 : ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+        ≤ ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+          + ‖y‖ := by
+      have h2 : ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+          ≤ ‖y - (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ + ‖y‖ := by
+        have h1 := norm_add_le
+          ((WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) - y) y
+        rw [sub_add_cancel, norm_sub_rev] at h1
+        exact h1
+      have hyd : ‖y - (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+          = ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ := by
+        have h3 : y - (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))
+            = (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) := by
+          rw [h1', sub_sub_cancel]
+        rw [h3]
+      linarith [h2, hyd]
+    have htri2 : ‖y‖
+        ≤ ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖
+          + ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ := by
+      have h2' : y = (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+            : EuclideanSpace ℝ (Fin n))
+          + (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n)) := by
+        have h3 := (eq_sub_iff_add_eq).mp h1'
+        rw [add_comm]
+        exact h3.symm
+      calc ‖y‖
+          = ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+              : EuclideanSpace ℝ (Fin n))
+            + (WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ := by
+            exact congrArg (fun w : EuclideanSpace ℝ (Fin n) => ‖w‖) h2'
+        _ ≤ ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+              : EuclideanSpace ℝ (Fin n))‖
+            + ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ :=
+            norm_add_le _ _
+    have habs : |‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ - ‖y‖|
+        ≤ ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ :=
+      abs_le.mpr ⟨by linarith [htri1], by linarith [htri2]⟩
+    have hsq : (‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ - ‖y‖) ^ 2
+        ≤ ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ^ 2 := by
+      have h2 := (sq_le_sq₀ (abs_nonneg _) (norm_nonneg _)).mpr habs
+      rwa [sq_abs] at h2
+    have hAh2 : (K⁻¹ * ‖h‖) ^ 2
+        ≤ ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ^ 2 :=
+      by
+        have h1 := mul_le_mul (hAge h) (hAge h)
+          (mul_nonneg (inv_nonneg.mpr hKpos.le) (norm_nonneg _)) (norm_nonneg _)
+        rw [← pow_two, ← pow_two] at h1
+        exact h1
+    have hK2 : K⁻¹ * K⁻¹ * ‖h‖ ^ 2
+        ≤ ‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ^ 2 := by
+      have h1d : (K⁻¹ * ‖h‖) ^ 2 = K⁻¹ * K⁻¹ * ‖h‖ ^ 2 := by ring
+      rw [← h1d]
+      exact hAh2
+    have hlin : -(((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+          ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2)
+        ≤ (lamS / 2) * ‖y‖ ^ 2 + -(lamS / (4 * K * K) * ‖h‖ ^ 2) := by
+      have h1 : lamS * (K⁻¹ * K⁻¹ * ‖h‖ ^ 2 / 2 - ‖y‖ ^ 2)
+          ≤ (S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+            ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) := by
+        have h2 : lamS * (K⁻¹ * K⁻¹ * ‖h‖ ^ 2 / 2 - ‖y‖ ^ 2)
+            ≤ lamS * (‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ^ 2 / 2
+              - ‖y‖ ^ 2) :=
+          mul_le_mul_of_nonneg_left (by linarith [hK2]) (le_of_lt hlamS)
+        have h3 : lamS * (‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ ^ 2 / 2
+              - ‖y‖ ^ 2)
+            ≤ lamS * ((‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ - ‖y‖) ^ 2) := by
+          refine mul_le_mul_of_nonneg_left ?_ (le_of_lt hlamS)
+          nlinarith [sq_nonneg (‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ))
+            : EuclideanSpace ℝ (Fin n))‖ / 2 - ‖y‖)]
+        have h4 : lamS * ((‖(WithLp.toLp 2 (A.mulVec (h : Fin n → ℝ)) : EuclideanSpace ℝ (Fin n))‖ - ‖y‖) ^ 2)
+            ≤ lamS * ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+              : EuclideanSpace ℝ (Fin n))‖ ^ 2 :=
+          mul_le_mul_of_nonneg_left hsq (le_of_lt hlamS)
+        have h5 : lamS * ‖(WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+              : EuclideanSpace ℝ (Fin n))‖ ^ 2
+            ≤ lamS * (((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) ⬝ᵥ
+              ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) := by
+          rw [dotProduct_self_eq_norm_sq]
+        linarith [h2, h3, h4, h5,
+          hquadS ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))]
+      have h1' : (lamS / (4 * K * K)) * ‖h‖ ^ 2 - (lamS / 2) * ‖y‖ ^ 2
+          ≤ ((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+            ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2 := by
+        have h2 := mul_le_mul_of_nonneg_left h1 (by norm_num : (0 : ℝ) ≤ 1 / 2)
+        rw [show ((1 : ℝ) / 2) * (lamS * (K⁻¹ * K⁻¹ * ‖h‖ ^ 2 / 2 - ‖y‖ ^ 2))
+            = (lamS / (4 * K * K)) * ‖h‖ ^ 2 - (lamS / 2) * ‖y‖ ^ 2 from by ring,
+          show ((1 : ℝ) / 2) * ((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+            ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+            = ((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+              ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2 from by ring] at h2
+        exact h2
+      have hnn : 0 ≤ (S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+          ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) := by
+        have h := Matrix.PosSemidef.dotProduct_mulVec_nonneg hSinvPD.posSemidef
+          ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))
+        simpa [dotProduct_comm] using h
+      have hhalf : ((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+          ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2
+          ≤ (S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+            ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)) :=
+        div_le_self hnn (by norm_num)
+      linarith [h1', hhalf]
+    -- the exponential bound and the conclusion
+    have hexp : Real.exp (-(((S⁻¹ *ᵥ ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) ⬝ᵥ
+          ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ))) / 2))
+        ≤ Real.exp ((lamS / 2) * ‖y‖ ^ 2) * Real.exp (-(lamS / (4 * K * K) * ‖h‖ ^ 2)) := by
+      rw [← Real.exp_add]
+      exact Real.exp_le_exp.mpr hlin
+    rw [hform, mul_assoc]
+    exact mul_le_mul_of_nonneg_left hexp
+      (le_of_lt (inv_pos.mpr (mul_pos h2pi hSqrtpos)))
