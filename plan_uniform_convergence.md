@@ -123,6 +123,49 @@ sequence `f_h^{(K)}` uniformly, since each is assumed to be a pdf.
 
 ## Step 3 (requested, separable) — `f_y` and `f_y^{(K)}` are the pdfs of `y` and `y^{(K)}`
 
+**STATUS: COMPLETE (all proved in `Main.lean`, compiles clean, no `sorry`).** Delivered
+theorems, in file order:
+
+1. `integral_toLp_trans` — left-translation invariance of `volume` integrals on
+   `EuclideanSpace ℝ (Fin n)`, for any complete-normed codomain `F` (used for both the ℂ
+   characteristic-function computation and the ℝ-valued mass computation).
+2. `lintegral_toLp_trans` — the ℝ≥0∞ version.
+3. `lintegral_noiseDens_mass` — for fixed `h`, `y ↦ f_n(y − A h)` has mass `1`
+   (translation by `−A h`).
+4. `lintegral_enorm_noiseDens_mul` — Tonelli on the coupled integrand
+   `(y, h) ↦ f_n(y − A h) f(h)`: the `ℝ≥0∞`-norm integral over `volume.prod volume`
+   equals `1` (both factors have infinite mass, so this is the nontrivial step).
+5. `charFun_fyPDF_density` — density-side factorization:
+   `charFun (volume.withDensity (fun y => ENNReal.ofReal (fyPDF …))) t
+      = (∫ h, e^{i⟨A h, t⟩} * f h) * charFun μn t`.
+   Key steps: `f' := hfint.aemeasurable.mk f` (measurable representative, needed for
+   `StronglyMeasurable.integral_prod_left`), per-`y` `integral_const_mul`, Fubini swap
+   dominated by item 4 via `Integrable.mono'`, per-`h` translation of
+   `∫ y, φ y * ↑f_n (y − A h)` with `φ y = φ (y − A h) * e h`, and
+   `integral_ofReal` (`∫ ↑g = ↑∫ g`) to move the ℝ→ℂ coercion across the inner integral.
+6. `isPdf_fyPDF` — `f_y` is a pdf: nonnegative pointwise; mass `1` by Fubini on the
+   ℝ-valued integrand (`integral_integral_swap`) plus the per-`h` translation
+   `∫ y, f_n(y − A h) dy = 1`.
+7. `fyPDF_eq_map` — assembly: both sides are finite measures
+   (`isFiniteMeasure_withDensity` on the right, using mass `1` from item 6; map/prod
+   finiteness instances on the left) with equal characteristic functions
+   (`charFun_map_fy` and item 5), so `Measure.ext_of_charFun` applies.
+
+Lean pitfalls learned along this step (keep for future work): `calc` continuation items
+must be indented strictly *less* than the first item's `=` when a middle item carries a
+`:= by`-newline proof (inline `:= by rw […]` or the law-side indentation works); a `by`
+proof on its own line in a *middle* calc item otherwise derails the parser; `rw` cannot
+rewrite inside a variable-shadowing beta-redex (`(fun h => …) h`) — insert a `show` that
+beta-reduces first; `Measurable.comp` against a metavariable `?f` loops at `whnf` on
+`EuclideanSpace` when the expected type is a curried lambda — instead give the concrete
+`∘`-form as the `have`'s type annotation and convert with `funext … ; simp [Function.comp]`;
+`RCLike.norm_ofReal` matches only via term-mode (concrete `have`s) in `rw` chains;
+`integral_const_mul`/`integral_mul_const`/`lintegral_mul_const` need explicit
+`(μ := volume)` in bare `have :=` terms; `set_option … in` cannot follow a docstring —
+the docstring goes between `set_option … in` and the declaration.
+
+Original plan text follows.
+
 Goal: identify `volume.withDensity (fun y => ENNReal.ofReal (fyPDF … fh y))` with the law of
 `y = A h + n`, where the law of `h` is `μ_h = volume.withDensity (fun x => ENNReal.ofReal (fh x))`
 and the law of `n` is `μ_n = multivariateGaussian (WithLp.toLp 2 (0 : Fin n → ℝ)) S`:
