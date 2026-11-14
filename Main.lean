@@ -3985,3 +3985,644 @@ theorem uniform_convergence_fyR (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS
   rw [MeasureTheory.integral_const_mul]
   exact mul_le_mul_of_nonneg_left (le_trans hstep3 hwK') hc₀pos.le
 
+
+/-! ## Track C: the CME convergence for rectangular `A` (`m < n`)
+
+The square-case mechanisms that fail for `m < n` (the `|det A|⁻¹` change of variables, the
+translation `h = h' + A⁻¹y`, and the decay `‖h‖ · f_n(y − A h) ≤ C(y)`) are replaced by
+the `c₀`-domination plus a finite-first-moment hypothesis on the prior
+`∫ ‖h‖ f(h) dh < ∞` (without which the posterior mean itself may fail to exist), together
+with the weighted-L¹ convergence of the priors from Track B. -/
+
+/-- Rectangular conditional mean estimate
+`ĥ(y) = ∫ h f_n(y − A h) f(h) / f_y(y) dh ∈ ℝ^n`. -/
+noncomputable def cmeR (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (y : EuclideanSpace ℝ (Fin m)) : EuclideanSpace ℝ (Fin n) :=
+  ∫ h : EuclideanSpace ℝ (Fin n),
+    ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h
+
+/-- Bridge from the eventually-bounded sup-form to the `Tendsto` form (the generalization
+of the ending of `main_theorem`, reusable for any uniform-convergence statement whose
+suprema are eventually bounded by `ofReal ε`). -/
+theorem tendsto_iSup_ofReal_of_eventually_le {E : Type*} {F : Type*} [NormedAddCommGroup F]
+    {s : Set E} (g : ℕ → E → F)
+    (h : ∀ ε > 0, ∀ᶠ K in atTop,
+      ⨆ y ∈ s, ENNReal.ofReal ‖g K y‖ ≤ ENNReal.ofReal ε) :
+    Tendsto (fun K => ⨆ y ∈ s, ENNReal.ofReal ‖g K y‖) atTop (nhds 0) := by
+  show Tendsto (fun K => ⨆ y ∈ s, ENNReal.ofReal ‖g K y‖) atTop (𝓝 (⊥ : ℝ≥0∞))
+  rw [nhds_bot_basis.tendsto_right_iff]
+  intro a ha
+  by_cases htop : a = ⊤
+  · subst htop
+    refine Filter.Eventually.mono (h 1 one_pos) fun K hK =>
+      Set.mem_Iio.2 (lt_of_le_of_lt hK ENNReal.ofReal_lt_top)
+  · have hε : 0 < a.toReal := ENNReal.toReal_pos (ne_of_gt ha) htop
+    refine Filter.Eventually.mono (h (a.toReal / 2) (div_pos hε two_pos)) fun K hK =>
+      Set.mem_Iio.2 (lt_of_le_of_lt hK
+        ((ENNReal.ofReal_lt_iff_lt_toReal (by linarith) htop).mpr
+          (div_lt_self hε one_lt_two)))
+
+/-- Pointwise norm bound for the rectangular posterior-moment integrand. -/
+theorem posterior_norm_le_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (y : EuclideanSpace ℝ (Fin m)) (h : EuclideanSpace ℝ (Fin n)) :
+    ‖(noiseDensR m n S hS A y h * f h) • h‖
+      ≤ ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ * (‖h‖ * f h) := by
+  classical
+  have h2pi : 0 < (2 * Real.pi) ^ ((m : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  have hc₀pos : 0 < c₀ := inv_pos.mpr (mul_pos h2pi hSqrtpos)
+  calc ‖(noiseDensR m n S hS A y h * f h) • h‖
+      = ‖h‖ * (noiseDensR m n S hS A y h * f h) := by
+        rw [norm_smul, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+          abs_of_nonneg (le_of_lt (noiseDensR_pos m n S hS A y h)),
+          abs_of_nonneg (hf.1 h)]
+        ring
+    _ ≤ ‖h‖ * (c₀ * f h) :=
+          mul_le_mul_of_nonneg_left
+            (mul_le_mul_of_nonneg_right (noiseDensR_le_const m n S hS A y h) (hf.1 h))
+            (norm_nonneg _)
+    _ = c₀ * (‖h‖ * f h) := by ring
+
+/-- Integrability of the rectangular posterior-moment integrand, given the finite first
+moment of the prior. -/
+theorem posterior_integrable_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (y : EuclideanSpace ℝ (Fin m))
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume) :
+    MeasureTheory.Integrable
+      (fun h => (noiseDensR m n S hS A y h * f h) • h) volume := by
+  classical
+  have hfm : MeasureTheory.AEStronglyMeasurable
+      (fun h => (noiseDensR m n S hS A y h * f h) • h) volume :=
+    (((aemeasurable_noiseDensR m n S hS A y).mul
+      ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)).smul
+      (measurable_id.aemeasurable)).aestronglyMeasurable
+  have hgint : MeasureTheory.Integrable
+      (fun h => ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ * (‖h‖ * f h)) volume :=
+    MeasureTheory.Integrable.smul ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ hfmom
+  refine MeasureTheory.Integrable.mono' hgint hfm
+    (Filter.Eventually.of_forall fun h => posterior_norm_le_R m n S hS A f hf y h)
+
+/-- Rectangular version of `posterior_moment_bound`: the posterior moment is bounded by
+`c₀ · ∫ ‖h‖ f(h) dh`, **uniformly over all `y ∈ ℝ^m`** — the finite-first-moment
+hypothesis on the prior replaces the square-case translation argument. -/
+theorem posterior_moment_bound_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (y : EuclideanSpace ℝ (Fin m))
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume) :
+    ‖∫ h : EuclideanSpace ℝ (Fin n), (noiseDensR m n S hS A y h * f h) • h ∂volume‖
+      ≤ ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹
+        * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * f h ∂volume := by
+  classical
+  have hmono : ∫ h : EuclideanSpace ℝ (Fin n),
+      ‖(noiseDensR m n S hS A y h * f h) • h‖ ∂volume
+      ≤ ∫ h : EuclideanSpace ℝ (Fin n),
+        ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ * (‖h‖ * f h) ∂volume := by
+    have hf2 : 0 ≤ᵐ[volume] (fun h => ‖(noiseDensR m n S hS A y h * f h) • h‖) :=
+      Filter.Eventually.of_forall fun h => norm_nonneg _
+    have hg2 : MeasureTheory.Integrable (fun h =>
+        ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ * (‖h‖ * f h)) volume :=
+      MeasureTheory.Integrable.smul ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ hfmom
+    have hle2 : (fun h => ‖(noiseDensR m n S hS A y h * f h) • h‖)
+        ≤ᵐ[volume] (fun h =>
+          ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ * (‖h‖ * f h)) :=
+      Filter.Eventually.of_forall fun h => posterior_norm_le_R m n S hS A f hf y h
+    exact integral_mono_of_nonneg hf2 hg2 hle2
+  refine le_trans (MeasureTheory.norm_integral_le_integral_norm
+    (μ := volume) (f := fun h : EuclideanSpace ℝ (Fin n) =>
+      (noiseDensR m n S hS A y h * f h) • h)) ?_
+  rw [← MeasureTheory.integral_const_mul]
+  exact hmono
+
+/-- Integrability of the weighted prior difference `(1+‖h‖)·|u − v|` from the `∫⁻`-bound. -/
+theorem weighted_diff_integrable (n : ℕ)
+    (u v : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hu : MeasureTheory.Integrable u volume) (hv : MeasureTheory.Integrable v volume)
+    (hwK : ∫⁻ h : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal ((1 + ‖h‖) * |u h - v h|) ∂volume < ⊤) :
+    MeasureTheory.Integrable
+      (fun h => (1 + ‖h‖) * |u h - v h|) volume := by
+  classical
+  have huM : MeasureTheory.AEStronglyMeasurable u volume := hu.aestronglyMeasurable
+  have hvM : MeasureTheory.AEStronglyMeasurable v volume := hv.aestronglyMeasurable
+  have hgnneg : ∀ h : EuclideanSpace ℝ (Fin n), 0 ≤ (1 + ‖h‖) * |u h - v h| :=
+    fun h => mul_nonneg (by positivity) (abs_nonneg _)
+  have hfm : MeasureTheory.AEStronglyMeasurable
+      (fun h => (1 + ‖h‖) * |u h - v h|) volume := by fun_prop
+  have hmemLp : MeasureTheory.MemLp (fun h => (1 + ‖h‖) * |u h - v h|) 1 volume := by
+    rw [MeasureTheory.memLp_iff, MeasureTheory.eLpNorm_one_eq_lintegral_enorm hfm]
+    have h2 : ∫⁻ x, ‖(fun h => (1 + ‖h‖) * |u h - v h|) x‖ₑ ∂volume
+        = ∫⁻ x, ENNReal.ofReal ((1 + ‖x‖) * |u x - v x|) ∂volume := by
+      refine lintegral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+      exact Real.enorm_eq_ofReal (hgnneg x)
+    rw [h2]
+    exact lt_of_lt_of_le hwK le_top
+  exact MeasureTheory.memLp_one_iff_integrable.mp hmemLp
+
+/-- Integrability of the rectangular posterior-difference integrand, given the weighted-L¹
+control of the prior difference. -/
+theorem posterior_diff_integrable_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin m))
+    (hintW : MeasureTheory.Integrable
+      (fun h : EuclideanSpace ℝ (Fin n) => (1 + ‖h‖) * |f h - fK h|) volume) :
+    MeasureTheory.Integrable
+      (fun h => (noiseDensR m n S hS A y h * (fK h - f h)) • h) volume := by
+  classical
+  have hndM := aemeasurable_noiseDensR m n S hS A y
+  have hfhM : MeasureTheory.AEStronglyMeasurable f volume :=
+    (integrable_of_isPdf hf).aestronglyMeasurable
+  have hfhKM : MeasureTheory.AEStronglyMeasurable fK volume :=
+    (integrable_of_isPdf hfK).aestronglyMeasurable
+  have hdiffM : AEMeasurable (fun h => noiseDensR m n S hS A y h * (fK h - f h)) volume := by
+    have h1 : (fun h => noiseDensR m n S hS A y h * (fK h - f h))
+        = (fun h => noiseDensR m n S hS A y h * fK h)
+          - (fun h => noiseDensR m n S hS A y h * f h) := by
+      funext h
+      rw [Pi.sub_apply, mul_sub]
+    rw [h1]
+    exact (hndM.mul hfhKM.aemeasurable).sub (hndM.mul hfhM.aemeasurable)
+  have hvecM : MeasureTheory.AEStronglyMeasurable
+      (fun h => (noiseDensR m n S hS A y h * (fK h - f h)) • h) volume :=
+    (hdiffM.smul (measurable_id.aemeasurable)).aestronglyMeasurable
+  have hgint : MeasureTheory.Integrable
+      (fun h => ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹
+        * ((1 + ‖h‖) * |f h - fK h|)) volume :=
+    MeasureTheory.Integrable.smul ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ hintW
+  have hnormle : ∀ h : EuclideanSpace ℝ (Fin n), ‖h‖ ≤ 1 + ‖h‖ := fun h =>
+    by linarith [norm_nonneg h]
+  refine MeasureTheory.Integrable.mono' hgint hvecM
+    (Filter.Eventually.of_forall fun h => ?_)
+  have h2pi : 0 < (2 * Real.pi) ^ ((m : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  have hc₀pos : 0 < c₀ := inv_pos.mpr (mul_pos h2pi hSqrtpos)
+  calc ‖(noiseDensR m n S hS A y h * (fK h - f h)) • h‖
+      = noiseDensR m n S hS A y h * |fK h - f h| * ‖h‖ := by
+        rw [norm_smul, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+          abs_of_nonneg (le_of_lt (noiseDensR_pos m n S hS A y h))]
+    _ = (noiseDensR m n S hS A y h * ‖h‖) * |fK h - f h| := by ring
+    _ ≤ (c₀ * (1 + ‖h‖)) * |fK h - f h| :=
+        mul_le_mul_of_nonneg_right
+          (mul_le_mul (noiseDensR_le_const m n S hS A y h) (hnormle h) (norm_nonneg _)
+            hc₀pos.le)
+          (abs_nonneg (fK h - f h))
+    _ = c₀ * ((1 + ‖h‖) * |f h - fK h|) := by
+      rw [mul_assoc, abs_sub_comm (fK h) (f h)]
+
+/-- Integrability of the rectangular `cme` integrand, given the finite first moment of the
+prior (which makes the domination `(c₀/f_y) · ‖h‖ f(h)` integrable). -/
+theorem cme_integrable_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f) (y : EuclideanSpace ℝ (Fin m))
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume) :
+    MeasureTheory.Integrable
+      (fun h => ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h) volume := by
+  classical
+  have hfypos : 0 < fyPDFR m n S hS A f y := fy_pos_R m n S hS A f hf y
+  have hndM := aemeasurable_noiseDensR m n S hS A y
+  have hprod : AEMeasurable (fun h => noiseDensR m n S hS A y h * f h) volume :=
+    hndM.mul ((integrable_of_isPdf hf).aestronglyMeasurable.aemeasurable)
+  have hsM : AEMeasurable
+      (fun h => (noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) volume := by
+    have h1 : AEMeasurable
+        (fun h => (1 / fyPDFR m n S hS A f y) * (noiseDensR m n S hS A y h * f h)) volume :=
+      hprod.const_mul (1 / fyPDFR m n S hS A f y)
+    have h2 : (fun h => (noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y)
+        = fun h => (1 / fyPDFR m n S hS A f y) * (noiseDensR m n S hS A y h * f h) := by
+      funext h
+      ring
+    rw [h2]
+    exact h1
+  have hvecM : MeasureTheory.AEStronglyMeasurable
+      (fun h => ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h) volume :=
+    (hsM.smul (measurable_id.aemeasurable)).aestronglyMeasurable
+  have hgint : MeasureTheory.Integrable
+      (fun h => (((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹
+        / fyPDFR m n S hS A f y) * (‖h‖ * f h)) volume :=
+    MeasureTheory.Integrable.smul
+      (((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ / fyPDFR m n S hS A f y) hfmom
+  refine MeasureTheory.Integrable.mono' hgint hvecM
+    (Filter.Eventually.of_forall fun h => ?_)
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  calc ‖((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h‖
+      = ‖h‖ * ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) := by
+        rw [norm_smul, norm_div, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+          Real.norm_eq_abs,
+          abs_of_nonneg (le_of_lt (noiseDensR_pos m n S hS A y h)),
+          abs_of_nonneg (hf.1 h), abs_of_nonneg (le_of_lt hfypos)]
+        ring
+    _ ≤ ‖h‖ * ((c₀ / fyPDFR m n S hS A f y) * f h) := by
+        refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg _)
+        have h2 : noiseDensR m n S hS A y h * f h ≤ c₀ * f h :=
+          mul_le_mul_of_nonneg_right (noiseDensR_le_const m n S hS A y h) (hf.1 h)
+        have h3 : (noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y
+            ≤ (c₀ * f h) / fyPDFR m n S hS A f y :=
+          (div_le_div_iff_of_pos_right hfypos).mpr h2
+        exact h3.trans (le_of_eq (by ring))
+    _ = (c₀ / fyPDFR m n S hS A f y) * (‖h‖ * f h) := by ring
+
+set_option linter.unusedVariables false in
+/-- Rectangular version of `cme_decomp` (Step C.1): the two-term decomposition of the
+`cmeR` difference. The finite-first-moment hypothesis `hfmom` makes the two `cme`
+integrand candidates integrable; `hintW` (the weighted-L¹ control of the prior
+difference) makes the `f_y^{(K)}`-side integrable. -/
+theorem cme_decomp_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
+    (y : EuclideanSpace ℝ (Fin m))
+    (hfyK : fyPDFR m n S hS A fK y ≠ 0) (hfy : fyPDFR m n S hS A f y ≠ 0)
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume)
+    (hintW : MeasureTheory.Integrable
+      (fun h : EuclideanSpace ℝ (Fin n) => (1 + ‖h‖) * |f h - fK h|) volume) :
+    cmeR m n S hS A fK y - cmeR m n S hS A f y
+      = (1 / fyPDFR m n S hS A fK y) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * (fK h - f h)) • h ∂volume
+        + ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+            / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * f h) • h ∂volume := by
+  classical
+  have hfhM : MeasureTheory.AEStronglyMeasurable f volume :=
+    (integrable_of_isPdf hf).aestronglyMeasurable
+  have hfhKM : MeasureTheory.AEStronglyMeasurable fK volume :=
+    (integrable_of_isPdf hfK).aestronglyMeasurable
+  -- the first moment of `fK`, controlled by the weighted-L¹ hypothesis and `hfmom`
+  have hfmomK : MeasureTheory.Integrable
+      (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * fK h) volume := by
+    have h1 : MeasureTheory.Integrable (fun h => ‖h‖ * |f h - fK h|) volume := by
+      refine MeasureTheory.Integrable.mono' hintW ?_
+        (Filter.Eventually.of_forall fun h => ?_)
+      · exact ((Continuous.aemeasurable (by
+            fun_prop : Continuous (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖))).mul
+          ((by fun_prop : MeasureTheory.AEStronglyMeasurable
+            (fun h => |f h - fK h|) volume).aemeasurable)).aestronglyMeasurable
+      · show ‖‖h‖ * |f h - fK h|‖ ≤ (1 + ‖h‖) * |f h - fK h|
+        rw [Real.norm_eq_abs, abs_of_nonneg
+          (mul_nonneg (norm_nonneg _) (abs_nonneg _))]
+        exact mul_le_mul_of_nonneg_right (by linarith [norm_nonneg h]) (abs_nonneg _)
+    have hsum : MeasureTheory.Integrable
+        (fun h => ‖h‖ * |f h - fK h| + ‖h‖ * f h) volume := h1.add hfmom
+    have hfKm : MeasureTheory.AEStronglyMeasurable
+        (fun h => ‖h‖ * fK h) volume :=
+      ((Continuous.aemeasurable (by
+          fun_prop : Continuous (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖))).mul
+        hfhKM.aemeasurable).aestronglyMeasurable
+    refine MeasureTheory.Integrable.mono' hsum hfKm
+      (Filter.Eventually.of_forall fun h => ?_)
+    show ‖‖h‖ * fK h‖ ≤ ‖h‖ * |f h - fK h| + ‖h‖ * f h
+    rw [Real.norm_eq_abs, abs_of_nonneg (mul_nonneg (norm_nonneg h) (hfK.1 h))]
+    have hmid : ‖h‖ * (|f h - fK h| + f h)
+        = ‖h‖ * |f h - fK h| + ‖h‖ * f h := by rw [mul_add]
+    refine le_trans (mul_le_mul_of_nonneg_left ?_ (norm_nonneg _)) hmid.le
+    · have h2 := le_abs_self (fK h - f h)
+      have h3 := abs_sub_comm (fK h) (f h)
+      linarith
+  have hI1 : MeasureTheory.Integrable
+      (fun h => ((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h) volume :=
+    cme_integrable_R m n S hS A fK hfK y hfmomK
+  have hI2 : MeasureTheory.Integrable
+      (fun h => ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h) volume :=
+    cme_integrable_R m n S hS A f hf y hfmom
+  have hIa := posterior_diff_integrable_R m n S hS A f hf fK hfK y hintW
+  have hIb := posterior_integrable_R m n S hS A f hf y hfmom
+  -- the difference-of-integrals identity (`MeasureTheory.integral_sub`)
+  have hstep1 : ∫ h : EuclideanSpace ℝ (Fin n),
+          (((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h
+            - ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h) ∂volume
+      = ∫ h : EuclideanSpace ℝ (Fin n),
+        ((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h ∂volume
+      - ∫ h : EuclideanSpace ℝ (Fin n),
+        ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h ∂volume :=
+    MeasureTheory.integral_sub hI1 hI2
+  calc cmeR m n S hS A fK y - cmeR m n S hS A f y
+      = ∫ h : EuclideanSpace ℝ (Fin n),
+          ((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h ∂volume
+        - ∫ h : EuclideanSpace ℝ (Fin n),
+          ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h ∂volume := by
+        unfold cmeR
+        rfl
+    _ = ∫ h : EuclideanSpace ℝ (Fin n),
+          (((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h
+            - ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h) ∂volume := hstep1.symm
+    _ = ∫ h : EuclideanSpace ℝ (Fin n),
+          ((1 / fyPDFR m n S hS A fK y) •
+              ((noiseDensR m n S hS A y h * (fK h - f h)) • h)
+            + ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+                / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) •
+              ((noiseDensR m n S hS A y h * f h) • h)) ∂volume := by
+        refine integral_congr_ae (Filter.Eventually.of_forall fun h => ?_)
+        show ((noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y) • h
+            - ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h
+          = (1 / fyPDFR m n S hS A fK y) •
+              ((noiseDensR m n S hS A y h * (fK h - f h)) • h)
+            + ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+                / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) •
+              ((noiseDensR m n S hS A y h * f h) • h)
+        have hscal : (noiseDensR m n S hS A y h * fK h) / fyPDFR m n S hS A fK y
+            - (noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y
+            = (1 / fyPDFR m n S hS A fK y) * (noiseDensR m n S hS A y h * (fK h - f h))
+              + ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+                  / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y))
+                * (noiseDensR m n S hS A y h * f h) := by
+          field_simp
+          ring
+        rw [← sub_smul, hscal, add_smul, ← smul_assoc, ← smul_assoc, smul_eq_mul,
+          smul_eq_mul]
+    _ = (1 / fyPDFR m n S hS A fK y) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * (fK h - f h)) • h ∂volume
+        + ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+            / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * f h) • h ∂volume := by
+        have hIa' : MeasureTheory.Integrable
+            (fun h => (1 / fyPDFR m n S hS A fK y) •
+              ((noiseDensR m n S hS A y h * (fK h - f h)) • h)) volume :=
+          (MeasureTheory.Integrable.smul (1 / fyPDFR m n S hS A fK y) hIa).congr
+            (Filter.Eventually.of_forall fun h => by simp)
+        have hIb' : MeasureTheory.Integrable
+            (fun h => ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+              / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) •
+              ((noiseDensR m n S hS A y h * f h) • h)) volume :=
+          (MeasureTheory.Integrable.smul ((fyPDFR m n S hS A f y - fyPDFR m n S hS A fK y)
+              / (fyPDFR m n S hS A fK y * fyPDFR m n S hS A f y)) hIb).congr
+            (Filter.Eventually.of_forall fun h => by simp)
+        rw [integral_add hIa' hIb', integral_smul _ _, integral_smul _ _]
+
+set_option linter.unusedVariables false in
+/-- **The rectangular main theorem (Track C)**: for `m < n` (underdetermined model
+`y = A h + n` with an *arbitrary* observation matrix `A : Matrix (Fin m) (Fin n) ℝ`), and
+priors `f^{(K)} → f` converging in the weighted-L¹ sense together with a finite first
+moment of the limit prior, the conditional mean estimates `ĥ^{(K)}(y)` converge to `ĥ(y)`
+uniformly on every ball in `ℝ^m`. -/
+theorem cme_uniform_balls_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ) (hfhpdf : IsPdf fh)
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * fh h) volume)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ) (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hw : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀,
+      ∫⁻ h : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume < ENNReal.ofReal ε)
+    (r : ℝ) (hr : 0 < r) :
+    Tendsto (fun K => ⨆ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
+        ENNReal.ofReal ‖cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  classical
+  -- the marginal lower bound for `fh` on the ball
+  obtain ⟨m', hm'pos, hmin⟩ := fy_min_pos_R m n S hS A fh hfhpdf r hr
+  have h2pi : 0 < (2 * Real.pi) ^ ((m : ℝ) / 2) := by positivity
+  have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
+  set c₀ : ℝ := ((2 * Real.pi) ^ ((m : ℝ) / 2) * Real.sqrt S.det)⁻¹ with hc₀def
+  have hc₀pos : 0 < c₀ := inv_pos.mpr (mul_pos h2pi hSqrtpos)
+  -- the first moment of the limit prior
+  have hMfnneg : 0 ≤ ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume :=
+    MeasureTheory.integral_nonneg fun h => mul_nonneg (norm_nonneg _) (hfhpdf.1 h)
+  -- the per-unit-`w` envelope
+  set M₁ : ℝ := m' / 2 with hM₁def
+  have hM₁pos : 0 < M₁ := by linarith
+  have hApos : 0 < (1 / M₁) * c₀ := mul_pos (div_pos one_pos hM₁pos) hc₀pos
+  have hBnneg : 0 ≤ (c₀ / (M₁ * m')) *
+      (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume) :=
+    mul_nonneg (div_nonneg hc₀pos.le (mul_pos hM₁pos hm'pos).le)
+      (mul_nonneg hc₀pos.le hMfnneg)
+  set D : ℝ := (1 / M₁) * c₀ + (c₀ / (M₁ * m')) *
+    (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume) with hDdef
+  have hDpos : 0 < D := by linarith [hApos, hBnneg, hDdef]
+  -- the machinery: for each `ε' > 0`, eventually the sup is at most `ofReal ε'`
+  have hmach : ∀ ε' > 0, ∀ᶠ K in atTop,
+      ⨆ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
+        ENNReal.ofReal ‖cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y‖
+        ≤ ENNReal.ofReal ε' := by
+    intro ε' hε'
+    -- the budget: a positive quantity below both `ε' / D` and `m' / (2 * c₀)`
+    -- (harmonic-type: `Bud * Bnd / (Bud + Bnd)` avoids `min`, whose API is unusable here)
+    set Bud : ℝ := ε' / D with hBuddef
+    set Bnd : ℝ := m' / (2 * c₀) with hBnddef
+    have hBudpos : 0 < Bud := div_pos hε' hDpos
+    have hBndpos : 0 < Bnd := div_pos hm'pos (mul_pos two_pos hc₀pos)
+    set ε₂ : ℝ := Bud * Bnd / (Bud + Bnd) with hε₂def
+    have hε₂pos : 0 < ε₂ := div_pos (mul_pos hBudpos hBndpos) (add_pos hBudpos hBndpos)
+    have hε₂leBud : ε₂ ≤ Bud := by
+      rw [hε₂def]
+      refine (div_le_iff₀ (add_pos hBudpos hBndpos)).mpr ?_
+      exact mul_le_mul_of_nonneg_left (le_add_of_nonneg_left hBudpos.le) hBudpos.le
+    have hε₂leBnd : ε₂ ≤ Bnd := by
+      rw [hε₂def, mul_comm]
+      refine (div_le_iff₀ (add_pos hBudpos hBndpos)).mpr ?_
+      exact mul_le_mul_of_nonneg_left (le_add_of_nonneg_right hBndpos.le) hBndpos.le
+    obtain ⟨K₀₁, hK₀₁⟩ := hw ε₂ hε₂pos
+    obtain ⟨K₀₂, hK₀₂⟩ := uniform_convergence_fyR m n S hS A fh hfhpdf fhK hfhKpdf hw
+      ε₂ hε₂pos
+    filter_upwards [Filter.eventually_ge_atTop (max K₀₁ K₀₂)] with K hK
+    have hK₁ : K ≥ K₀₁ := le_trans (le_max_left _ _) hK
+    have hK₂ : K ≥ K₀₂ := le_trans (le_max_right _ _) hK
+    -- the real weighted bound
+    have hwK := hK₀₁ K hK₁
+    have hfhm : MeasureTheory.AEStronglyMeasurable fh volume :=
+      (integrable_of_isPdf hfhpdf).aestronglyMeasurable
+    have hfhKm : MeasureTheory.AEStronglyMeasurable (fhK K) volume :=
+      (integrable_of_isPdf (hfhKpdf K)).aestronglyMeasurable
+    have hintW : MeasureTheory.Integrable
+        (fun h => (1 + ‖h‖) * |fh h - fhK K h|) volume :=
+      weighted_diff_integrable n fh (fhK K) (integrable_of_isPdf hfhpdf)
+        (integrable_of_isPdf (hfhKpdf K)) (lt_of_lt_of_le hwK le_top)
+    -- the real weighted integral is at most `ε₂`
+    have hwReal : ∫ h : EuclideanSpace ℝ (Fin n), (1 + ‖h‖) * |fh h - fhK K h| ∂volume
+        ≤ ε₂ := by
+      rw [MeasureTheory.integral_eq_lintegral_of_nonneg_ae
+        (Filter.Eventually.of_forall fun h =>
+          mul_nonneg (by positivity) (abs_nonneg _))
+        (by fun_prop : MeasureTheory.AEStronglyMeasurable
+          (fun h => (1 + ‖h‖) * |fh h - fhK K h|) volume)]
+      exact ENNReal.toReal_le_of_le_ofReal (le_of_lt hε₂pos) (le_of_lt hwK)
+    have hΔfy : ∀ y : EuclideanSpace ℝ (Fin m),
+        |fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y| ≤ c₀ * ε₂ :=
+      fun y => hK₀₂ K hK₂ y
+    refine iSup₂_le fun y hy => ENNReal.ofReal_le_ofReal ?_
+    have hy' : ‖y‖ ≤ r := by
+      rw [Metric.mem_closedBall, dist_eq_norm, sub_zero] at hy
+      exact hy
+    have hminy : m' ≤ fyPDFR m n S hS A fh y := hmin y hy'
+    have hΔy := hΔfy y
+    -- the `f_y^{(K)}` lower bound `M₁ = m'/2`
+    have hc₀ε₂le : c₀ * ε₂ ≤ m' / 2 := by
+      have h1 : c₀ * ε₂ ≤ c₀ * Bnd :=
+        mul_le_mul_of_nonneg_left hε₂leBnd hc₀pos.le
+      calc c₀ * ε₂ ≤ c₀ * Bnd := h1
+        _ = c₀ * (m' / (2 * c₀)) := rfl
+        _ = m' / 2 := by field_simp
+    have hfyKlb : m' / 2 ≤ fyPDFR m n S hS A (fhK K) y := by
+      have h1 : fyPDFR m n S hS A fh y
+          - |fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y|
+          ≤ fyPDFR m n S hS A (fhK K) y := by
+        have hw2 : fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y
+            ≤ |fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y| := le_abs_self _
+        linarith
+      linarith [h1, hΔy, hminy, hc₀ε₂le]
+    have hfyKpos : 0 < fyPDFR m n S hS A (fhK K) y := lt_of_lt_of_le hM₁pos hfyKlb
+    have hfypos : 0 < fyPDFR m n S hS A fh y := lt_of_lt_of_le hm'pos hminy
+    have hfyKne : fyPDFR m n S hS A (fhK K) y ≠ 0 := ne_of_gt hfyKpos
+    have hfyne : fyPDFR m n S hS A fh y ≠ 0 := ne_of_gt hfypos
+    -- the decomposition and the two rates
+    have hdec := cme_decomp_R m n S hS A fh hfhpdf (fhK K) (hfhKpdf K) y hfyKne hfyne
+      hfmom hintW
+    have hT1 : ‖(1 / fyPDFR m n S hS A (fhK K) y) •
+        ∫ h : EuclideanSpace ℝ (Fin n),
+          (noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h ∂volume‖
+      ≤ ε₂ * ((1 / M₁) * c₀) := by
+      have hscal : 0 ≤ 1 / fyPDFR m n S hS A (fhK K) y :=
+        le_of_lt (div_pos one_pos hfyKpos)
+      have hpt : ∀ h : EuclideanSpace ℝ (Fin n),
+          ‖(noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h‖
+          ≤ c₀ * (‖h‖ * |fh h - (fhK K) h|) := by
+        intro h
+        calc ‖(noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h‖
+            = (noiseDensR m n S hS A y h * ‖h‖) * |(fhK K) h - fh h| := by
+              rw [norm_smul, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+                abs_of_nonneg (le_of_lt (noiseDensR_pos m n S hS A y h))]
+              ring
+          _ ≤ (c₀ * ‖h‖) * |(fhK K) h - fh h| :=
+              mul_le_mul_of_nonneg_right
+                (mul_le_mul (noiseDensR_le_const m n S hS A y h) le_rfl
+                  (norm_nonneg _) hc₀pos.le) (abs_nonneg ((fhK K) h - fh h))
+          _ = c₀ * (‖h‖ * |fh h - (fhK K) h|) := by
+              rw [abs_sub_comm ((fhK K) h) (fh h)]
+              ring
+      have hintAbs : MeasureTheory.Integrable
+          (fun h => ‖h‖ * |fh h - fhK K h|) volume := by
+        have habsM : MeasureTheory.AEStronglyMeasurable
+            (fun h => ‖h‖ * |fh h - fhK K h|) volume := by fun_prop
+        refine MeasureTheory.Integrable.mono' hintW habsM
+          (Filter.Eventually.of_forall fun h => ?_)
+        show ‖‖h‖ * |fh h - fhK K h|‖ ≤ (1 + ‖h‖) * |fh h - fhK K h|
+        rw [Real.norm_eq_abs, abs_of_nonneg
+          (mul_nonneg (norm_nonneg _) (abs_nonneg _))]
+        exact mul_le_mul_of_nonneg_right (by linarith [norm_nonneg h])
+          (abs_nonneg (fh h - fhK K h))
+      calc ‖(1 / fyPDFR m n S hS A (fhK K) y) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h ∂volume‖
+          = (1 / fyPDFR m n S hS A (fhK K) y) *
+            ‖∫ h : EuclideanSpace ℝ (Fin n),
+              (noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h ∂volume‖ := by
+            rw [norm_smul, Real.norm_eq_abs, abs_eq_self.mpr hscal]
+        _ ≤ (1 / fyPDFR m n S hS A (fhK K) y) *
+            ∫ h : EuclideanSpace ℝ (Fin n),
+              ‖(noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h‖ ∂volume :=
+            mul_le_mul_of_nonneg_left
+              (MeasureTheory.norm_integral_le_integral_norm
+                (μ := volume) (f := fun h : EuclideanSpace ℝ (Fin n) =>
+                  (noiseDensR m n S hS A y h * ((fhK K) h - fh h)) • h)) hscal
+        _ ≤ (1 / fyPDFR m n S hS A (fhK K) y) *
+            ∫ h : EuclideanSpace ℝ (Fin n),
+              c₀ * (‖h‖ * |fh h - fhK K h|) ∂volume :=
+            mul_le_mul_of_nonneg_left
+              (integral_mono_of_nonneg
+                (Filter.Eventually.of_forall fun h => norm_nonneg _)
+                (MeasureTheory.Integrable.smul c₀ hintAbs)
+                (Filter.Eventually.of_forall fun h => hpt h)) hscal
+        _ ≤ (1 / fyPDFR m n S hS A (fhK K) y) *
+            (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * |fh h - fhK K h| ∂volume) := by
+            rw [MeasureTheory.integral_const_mul]
+        _ ≤ (1 / M₁) * (c₀ * ε₂) := by
+            have h1 : 1 / fyPDFR m n S hS A (fhK K) y ≤ 1 / M₁ :=
+              (div_le_div_iff_of_pos_left zero_lt_one hfyKpos hM₁pos).mpr hfyKlb
+            have h2 : ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * |fh h - fhK K h| ∂volume
+                ≤ ∫ h : EuclideanSpace ℝ (Fin n),
+                  (1 + ‖h‖) * |fh h - fhK K h| ∂volume := by
+              have hf2 : 0 ≤ᵐ[volume] (fun h => ‖h‖ * |fh h - fhK K h|) :=
+                Filter.Eventually.of_forall fun h =>
+                  mul_nonneg (norm_nonneg _) (abs_nonneg _)
+              have hle2 : (fun h => ‖h‖ * |fh h - fhK K h|)
+                  ≤ᵐ[volume] (fun h => (1 + ‖h‖) * |fh h - fhK K h|) :=
+                Filter.Eventually.of_forall fun h =>
+                  mul_le_mul_of_nonneg_right (by linarith [norm_nonneg h])
+                    (abs_nonneg _)
+              exact integral_mono_of_nonneg hf2 hintW hle2
+            have hwReal2 : ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * |fh h - fhK K h| ∂volume
+                ≤ ε₂ := le_trans h2 hwReal
+            have hcap : c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * |fh h - fhK K h| ∂volume
+                ≤ c₀ * ε₂ := mul_le_mul_of_nonneg_left hwReal2 hc₀pos.le
+            exact mul_le_mul h1 hcap
+              (by positivity) (le_of_lt (div_pos one_pos hM₁pos))
+        _ = ε₂ * ((1 / M₁) * c₀) := by ring
+    have hT2 : ‖((fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y)
+        / (fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y)) •
+      ∫ h : EuclideanSpace ℝ (Fin n), (noiseDensR m n S hS A y h * fh h) • h ∂volume‖
+      ≤ ε₂ * ((c₀ / (M₁ * m')) *
+        (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume)) := by
+      have hBpos : 0 < fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y :=
+        mul_pos hfyKpos hfypos
+      have hJ := posterior_moment_bound_R m n S hS A fh hfhpdf y hfmom
+      calc ‖((fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y)
+            / (fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y)) •
+          ∫ h : EuclideanSpace ℝ (Fin n),
+            (noiseDensR m n S hS A y h * fh h) • h ∂volume‖
+          = |fyPDFR m n S hS A fh y - fyPDFR m n S hS A (fhK K) y|
+            / (fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y) *
+            ‖∫ h : EuclideanSpace ℝ (Fin n),
+              (noiseDensR m n S hS A y h * fh h) • h ∂volume‖ := by
+            rw [norm_smul, Real.norm_eq_abs, abs_div, abs_of_pos hBpos]
+        _ ≤ (c₀ * ε₂ / (fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y)) *
+            ‖∫ h : EuclideanSpace ℝ (Fin n),
+              (noiseDensR m n S hS A y h * fh h) • h ∂volume‖ :=
+            mul_le_mul_of_nonneg_right
+              ((div_le_div_iff_of_pos_right hBpos).mpr hΔy) (norm_nonneg _)
+        _ ≤ (c₀ * ε₂ / (M₁ * m')) *
+            ‖∫ h : EuclideanSpace ℝ (Fin n),
+              (noiseDensR m n S hS A y h * fh h) • h ∂volume‖ := by
+            have hBle : M₁ * m' ≤ fyPDFR m n S hS A (fhK K) y * fyPDFR m n S hS A fh y :=
+              mul_le_mul hfyKlb hminy hm'pos.le hfyKpos.le
+            exact mul_le_mul_of_nonneg_right
+              ((div_le_div_iff_of_pos_left (mul_pos hc₀pos hε₂pos) hBpos
+                (mul_pos hM₁pos hm'pos)).mpr hBle) (norm_nonneg _)
+        _ ≤ (c₀ * ε₂ / (M₁ * m')) *
+            (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume) :=
+            mul_le_mul_of_nonneg_left hJ
+              (div_nonneg (le_of_lt (mul_pos hc₀pos hε₂pos))
+                (le_of_lt (mul_pos hM₁pos hm'pos)))
+        _ = ε₂ * ((c₀ / (M₁ * m')) *
+              (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume)) := by ring
+    -- the sum
+    have hnormle : ‖cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y‖ ≤ ε' := by
+      rw [norm_sub_rev, hdec]
+      refine le_trans (norm_add_le _ _) ?_
+      have hDsplit : ε₂ * D = ε₂ * ((1 / M₁) * c₀)
+          + ε₂ * ((c₀ / (M₁ * m')) *
+            (c₀ * ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * fh h ∂volume)) := by
+        rw [hDdef]; ring
+      have hε₂D : ε₂ * D ≤ ε' := by
+        -- `ε₂ ≤ Bud = ε' / D`
+        have hmin1 : ε₂ ≤ ε' / D := hε₂leBud
+        have h2 : ε₂ * D ≤ (ε' / D) * D :=
+          mul_le_mul_of_nonneg_right hmin1 (le_of_lt hDpos)
+        rw [div_mul_cancel₀ _ (ne_of_gt hDpos)] at h2
+        exact h2
+      linarith [hT1, hT2, hDsplit, hε₂D]
+    exact hnormle
+  -- conclude via the Iio-basis helper
+  refine tendsto_iSup_ofReal_of_eventually_le
+    (fun K y => cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y) hmach
+
+/-- Epsilon–delta form of `cme_uniform_balls_R`: for every `ε > 0` there is a threshold
+beyond which `‖ĥ^{(K)}(y) − ĥ(y)‖ ≤ ε` holds for all `y` in the ball simultaneously. -/
+theorem cme_uniform_balls_eps_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ) (hfhpdf : IsPdf fh)
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * fh h) volume)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ) (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hw : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀,
+      ∫⁻ h : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume < ENNReal.ofReal ε)
+    (r : ℝ) (hr : 0 < r) (ε : ℝ) (hε : 0 < ε) :
+    ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
+      ‖cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y‖ ≤ ε :=
+  tendsto_iSup_norm_eps (fun K y => cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y)
+    (cme_uniform_balls_R m n S hS A fh hfhpdf hfmom fhK hfhKpdf hw r hr) ε hε
