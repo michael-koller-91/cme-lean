@@ -3545,3 +3545,99 @@ theorem cme_pointwise_convergence
     (ENNReal.continuousAt_toReal (x := (0 : ℝ≥0∞)) (by simp)).tendsto.comp h0
   exact Tendsto.congr' (Filter.Eventually.of_forall fun K => by simp) h1
 
+
+/-! ## Epsilon–delta form and compact-set generalization of `main_theorem` -/
+
+
+/-- Bridge between the `ℝ≥0∞`-supremum limit form of uniform convergence and the ε-δ form:
+if the suprema of `ofReal ‖g K y‖` over `s` tend to `0`, then for every `ε > 0` there is a
+threshold beyond which `‖g K y‖ ≤ ε` holds for all `y ∈ s` simultaneously. -/
+theorem tendsto_iSup_norm_eps {E : Type*} {F : Type*} [NormedAddCommGroup F] {s : Set E}
+    (g : ℕ → E → F)
+    (h : Tendsto (fun K => ⨆ y ∈ s, ENNReal.ofReal ‖g K y‖) atTop (nhds 0))
+    (ε : ℝ) (hε : 0 < ε) :
+    ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ y ∈ s, ‖g K y‖ ≤ ε := by
+  classical
+  have h' : Tendsto (fun K => ⨆ y ∈ s, ENNReal.ofReal ‖g K y‖) atTop
+      (𝓝 (⊥ : ℝ≥0∞)) := h
+  rw [nhds_bot_basis.tendsto_right_iff] at h'
+  have h1 := h' (ENNReal.ofReal ε) (ENNReal.ofReal_pos.mpr hε)
+  obtain ⟨K₀, hK₀⟩ := Filter.eventually_atTop.mp h1
+  refine ⟨K₀, fun K hK y hy => ?_⟩
+  have hpt : ENNReal.ofReal ‖g K y‖ ≤ ⨆ y' ∈ s, ENNReal.ofReal ‖g K y'‖ :=
+    le_iSup₂_of_le y hy (le_refl _)
+  have hlt : ENNReal.ofReal ‖g K y‖ < ENNReal.ofReal ε :=
+    lt_of_le_of_lt hpt (Set.mem_Iio.mp (hK₀ K hK))
+  exact le_of_lt ((ENNReal.ofReal_lt_ofReal_iff').mp hlt).1
+
+
+/-- Epsilon–delta restatement of `main_theorem`: uniform convergence of the conditional
+mean estimates on the closed ball `B_r`, in the familiar form
+
+`∀ ε > 0, ∃ K₀, ∀ K ≥ K₀, ∀ y ∈ B_r, ‖ĥ^{(K)}(y) − ĥ(y)‖ ≤ ε`. -/
+theorem cme_uniform_balls_eps
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (r : ℝ) (hr : 0 < r) (ε : ℝ) (hε : 0 < ε) :
+    ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ y ∈ Metric.closedBall 0 r,
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖ ≤ ε :=
+  tendsto_iSup_norm_eps (fun K y => cme n S hS A fh y - cme n S hS A (fhK K) y)
+    (main_theorem n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv r hr) ε hε
+
+
+/-- Generalization of `main_theorem` from closed balls to arbitrary compact sets: the
+conditional mean estimates converge uniformly on every compact subset of `ℝ^N`
+(compact convergence). A compact set is contained in some closed ball, so this follows
+from `main_theorem` by monotonicity of the supremum. -/
+theorem cme_uniform_compact
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (s : Set (EuclideanSpace ℝ (Fin n))) (hs : IsCompact s) :
+    Tendsto (fun K => ⨆ y ∈ s,
+        ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖) atTop (nhds 0) := by
+  classical
+  obtain ⟨R, hRpos, hR⟩ := hs.isBounded.subset_closedBall_lt 0
+    (0 : EuclideanSpace ℝ (Fin n))
+  exact tendsto_of_tendsto_of_tendsto_of_le_of_le (g := fun _ : ℕ => (0 : ℝ≥0∞))
+    tendsto_const_nhds
+    (main_theorem n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv R hRpos)
+    (fun _ => zero_le)
+    (fun K => iSup₂_le fun y hy => le_iSup₂_of_le y (hR hy) (le_refl _))
+
+
+/-- Epsilon–delta form of `cme_uniform_compact`: for every compact set `s` and every
+`ε > 0` there is a threshold beyond which `‖ĥ^{(K)}(y) − ĥ(y)‖ ≤ ε` holds for all
+`y ∈ s` simultaneously. -/
+theorem cme_uniform_compact_eps
+    (n : ℕ)
+    (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhpdf : IsPdf fh)
+    (hfhcont : Continuous fh)
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε)
+    (s : Set (EuclideanSpace ℝ (Fin n))) (hs : IsCompact s) (ε : ℝ) (hε : 0 < ε) :
+    ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ y ∈ s,
+      ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖ ≤ ε :=
+  tendsto_iSup_norm_eps (fun K y => cme n S hS A fh y - cme n S hS A (fhK K) y)
+    (cme_uniform_compact n S hS A hA fh hfhpdf hfhcont fhK hfhKpdf hfhKcont hconv s hs)
+    ε hε
