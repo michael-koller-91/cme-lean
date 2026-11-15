@@ -1,11 +1,11 @@
 module
 
-import Mathlib.Probability.Distributions.Gaussian.Multivariate
-import Mathlib.Probability.Distributions.Gaussian.Fernique
-import Mathlib.Analysis.InnerProductSpace.PiL2
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Analysis.SpecialFunctions.Gaussian.FourierTransform
-import Mathlib.MeasureTheory.Function.Jacobian
+public import Mathlib.Probability.Distributions.Gaussian.Multivariate
+public import Mathlib.Probability.Distributions.Gaussian.Fernique
+public import Mathlib.Analysis.InnerProductSpace.PiL2
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Analysis.SpecialFunctions.Gaussian.FourierTransform
+public import Mathlib.MeasureTheory.Function.Jacobian
 
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
 open scoped Matrix MatrixOrder ENNReal
@@ -1112,7 +1112,7 @@ hypotheses on `f_h` to match the setting of `appendix_1.tex`. -/
 
 /-- `f` is a probability density function w.r.t. `volume` on `EuclideanSpace ℝ (Fin n)`:
 nonnegative with total mass `1`. -/
-def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
+public def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
   0 ≤ f ∧ ∫ x, f x ∂volume = 1
 
 
@@ -2055,7 +2055,7 @@ Notes on the formalization:
 `f_y` is the observation density `fyPDF` induced by `f`. This is a Bochner integral of an
 `EuclideanSpace ℝ (Fin n)`-valued integrand. For `f := fhK K` this is `ĥ^{(K)}` and for
 `f := fh` this is `ĥ`. -/
-noncomputable def cme (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
+public noncomputable def cme (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
     (y : EuclideanSpace ℝ (Fin n)) : EuclideanSpace ℝ (Fin n) :=
   ∫ h : EuclideanSpace ℝ (Fin n),
@@ -3366,7 +3366,7 @@ over the ball tending to `0`.
 
 The pointwise convergence of Eq. (pointwise_convergence) is the easy consequence
 `cme_pointwise_convergence` below. -/
-theorem main_theorem
+public theorem main_theorem
     (n : ℕ)
     (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det)
@@ -4626,3 +4626,4 @@ theorem cme_uniform_balls_eps_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS
       ‖cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y‖ ≤ ε :=
   tendsto_iSup_norm_eps (fun K y => cmeR m n S hS A fh y - cmeR m n S hS A (fhK K) y)
     (cme_uniform_balls_R m n S hS A fh hfhpdf hfmom fhK hfhKpdf hw r hr) ε hε
+
