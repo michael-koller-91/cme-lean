@@ -1,5 +1,20 @@
 # CME Lean
 
+This is a Lean 4 (Mathlib) formalization of **Theorem 2** of the paper
+
+> M. Koller, B. Fesl, N. Turan and W. Utschick, "An Asymptotically MSE-Optimal
+> Estimator Based on Gaussian Mixture Models," *IEEE Transactions on Signal
+> Processing*, 2022.
+
+[Paper on IEEE Explore.](https://ieeexplore.ieee.org/document/9842343)
+[Paper on arXiv.](https://arxiv.org/abs/2112.12499)
+
+The theorem establishes **locally uniform convergence** of the conditional mean
+estimates (CMEs): for the linear Gaussian measurement model `y = A h + n` with
+invertible `A`, the CMEs computed from a sequence of prior densities converging
+uniformly to a continuous prior converge to the true CME, uniformly on every
+closed ball in `ℝ^n`.
+
 ## Verify / Build
 ```console
 lake build
