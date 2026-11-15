@@ -1,4 +1,4 @@
-name = "GmmLean"
+name = "CNN Lean"
 version = "0.1.0"
 defaultTargets = ["Main"]
 
