@@ -38,7 +38,7 @@ theorem main_theorem
     (hfhKcont : ∀ K, Continuous (fhK K))
     -- Let fhK converge uniformly to fh.
     (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
-    -- We have locally uniform convergence.
+    -- Then we have locally uniform convergence:
     -- For every radius r > 0,
     ∀ r : ℝ,
       0 < r →
@@ -56,6 +56,6 @@ theorem main_theorem
 ## Miscellaneous Notes
 
 ```console
-lean-fmt format)
-lake env lean Printer.lean)
+lean-fmt format
+lake env lean Printer.lean
 ```
