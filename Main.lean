@@ -122,7 +122,7 @@ noncomputable def fyPDFR
   ∫ h : EuclideanSpace ℝ (Fin n), noiseDensR m n S hS A y h * f h ∂volume
 
 /-- Rectangular conditional mean estimate `ĥ(y) = ∫ h f_n(y − A h) f(h) / f_y(y) dh ∈ ℝ^n`. -/
-noncomputable def cmeR
+public noncomputable def cmeR
     -- Let m, n be natural numbers.
     (m n : ℕ)
     -- Let S be a matrix in R^{m × m}.
@@ -4932,7 +4932,7 @@ theorem cme_decomp_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef
 priors `f^{(K)} → f` converging in the weighted-L¹ sense together with a finite first
 moment of the limit prior, the conditional mean estimates `ĥ^{(K)}(y)` converge to `ĥ(y)`
 uniformly on every ball in `ℝ^m`. -/
-theorem cme_uniform_balls_R
+public theorem cme_uniform_balls_R
     -- Let m, n be natural numbers.
     (m n : ℕ)
     -- Let S be a matrix in R^{m × m}.

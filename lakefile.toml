@@ -1,12 +1,12 @@
 name = "CME Lean"
 version = "0.1.0"
-defaultTargets = ["Main"]
+defaultTargets = ["Main", "AxiomCheck"]
 
 [[lean_lib]]
 name = "Main"
 
 [[lean_lib]]
-name = "Printer"
+name = "AxiomCheck"
 
 [[require]]
 name = "mathlib"
