@@ -12,3 +12,8 @@ name = "Printer"
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.35.0"
+
+[[require]]
+name = "lean-fmt"
+git = "https://github.com/jcreinhold/lean-fmt"
+rev = "v4.35.0"
