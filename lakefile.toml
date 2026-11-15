@@ -1,21 +1,13 @@
 name = "GmmLean"
 version = "0.1.0"
-defaultTargets = ["gmmlean"]
-
-[[lean_lib]]
-name = "GmmLean"
-
-[[lean_lib]]
-name = "Printer"
+defaultTargets = ["Main"]
 
 [[lean_lib]]
 name = "Main"
 
-[[lean_exe]]
-name = "gmmlean"
-root = "Main"
+[[lean_lib]]
+name = "Printer"
 
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-
