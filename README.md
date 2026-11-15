@@ -50,7 +50,7 @@ theorem main_theorem
     -- For every K, let fhK be a PDF.
     (hfhKpdf : ∀ K, IsPdf (fhK K))
     -- For every K, let fhK be continuous.
-    (hfhKcont : ∀ K, Continuous (fhK K))
+    (_hfhKcont : ∀ K, Continuous (fhK K))
     -- Let fhK converge uniformly to fh.
     (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
     -- Then we have locally uniform convergence:

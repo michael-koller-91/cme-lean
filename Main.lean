@@ -1390,7 +1390,6 @@ theorem integrable_of_isPdf {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ} (
     (by
       rw [hf.2]; norm_num)
 
-set_option linter.unusedVariables false in
 /-- Uniform convergence of the observation densities for a uniformly convergent sequence of
 pdfs (`appendix_1.tex`, first part of the proof of the main result): if `f_h` is a continuous
 pdf vanishing at infinity and `f_h^{(K)}` is a sequence of pdfs converging uniformly to `f_h`
@@ -1402,7 +1401,7 @@ Continuity and vanishing at infinity are not needed for the convergence transfer
 recorded to match the setting of `appendix_1.tex` (`f_h ∈ C₀`). -/
 theorem uniform_convergence_fy_pdf (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (fh : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhpdf : IsPdf fh) (hfhcont : Continuous fh) (hfh0 : VanishesAtInfinity fh)
+    (hfhpdf : IsPdf fh) (_hfhcont : Continuous fh) (_hfh0 : VanishesAtInfinity fh)
     (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ) (hfhKpdf : ∀ K, IsPdf (fhK K))
     (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) (ε : ℝ) (hε : 0 < ε) :
     ∃ K₀ : ℕ,
@@ -1770,7 +1769,6 @@ theorem lintegral_noiseDens_mass (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS 
         (ENNReal.measurable_ofReal.comp (measurable_multivariateGaussianPDF n (0 : Fin n → ℝ) S hS))
     _ = 1 := hlintn
 
-set_option maxHeartbeats 10000000 in
 /-- Tonelli's theorem on the coupled integrand `(y, h) ↦ f_n(y - A h) f(h)`: the `ℝ≥0∞`-norm
 integral of the Bochner integrand in `charFun_fyPDF_density` over `volume.prod volume` equals
 `1`, so the integrand is integrable although both factors have infinite mass. -/
@@ -1888,7 +1886,6 @@ theorem lintegral_enorm_noiseDens_mul (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ)
         ofReal_integral_eq_lintegral_ofReal hfint (Filter.Eventually.of_forall fun x => hposf x),
         hf.2, ENNReal.ofReal_one]
 
-set_option maxHeartbeats 2000000 in
 /-- The density-side characteristic function: the characteristic function of the measure with
 density `f_y(y) = ∫ f_n(y - A h) f(h) dh` factors into the same `h`-integral times the
 characteristic function of the noise. Fubini is applied on `volume.prod volume` (both factors
@@ -2890,13 +2887,12 @@ theorem noiseDens_decay (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDe
     rw [hform, mul_assoc]
     exact mul_le_mul_of_nonneg_left hexp (le_of_lt (inv_pos.mpr (mul_pos h2pi hSqrtpos)))
 
-set_option linter.unusedVariables false in
 /-- Uniform moment bound (Step A.1 of `plan_main_theorem.md`): on the ball `‖y‖ ≤ r` the
 `K`-independent factor `∫ ‖h‖ f_n(y − A h) dh` is bounded by a constant depending only on
 `n, S, A, r`. Via the translation `h = h' + A⁻¹ y` (`integral_toLp_trans`), the triangle
 inequality, and the per-`y` integrability `integral_gaussian_bounded`. -/
 theorem noiseDens_moment_uniform (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (r : ℝ) (hr : 0 < r) :
+    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (r : ℝ) (_hr : 0 < r) :
     ∃ C : ℝ,
       ∀ y : EuclideanSpace ℝ (Fin n),
         ‖y‖ ≤ r → ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume ≤ C := by
@@ -3107,7 +3103,6 @@ theorem norm_mul_noiseDens_zero_le (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (h
       _ = cS * c⁻¹ := by rw [_root_.mul_inv_rev, mul_inv_cancel_left₀ hne]
       _ ≤ cS * max 1 c⁻¹ := mul_le_mul_of_nonneg_left (le_max_right _ _) hcS.le
 
-set_option linter.unusedVariables false in
 /-- Step B.2 of `plan_main_theorem.md` (second part): the posterior moment
 `J(y) = ∫ h, (noiseDens n S hS A y h * f h) • h` is uniformly bounded on every ball
 `‖y‖ ≤ r`, with a constant depending only on `n, S, A, f, r`. Via the translation
@@ -3117,7 +3112,7 @@ set_option linter.unusedVariables false in
 invariance `∫ f (toLp (c + x)) = ∫ f = 1`. -/
 theorem posterior_moment_bound (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : IsPdf f) (r : ℝ) (hr : 0 < r) :
+    (hf : IsPdf f) (r : ℝ) (_hr : 0 < r) :
     ∃ C : ℝ,
       ∀ y : EuclideanSpace ℝ (Fin n),
         ‖y‖ ≤ r →
@@ -3282,14 +3277,13 @@ theorem posterior_moment_bound (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : 
       exact
         mul_le_mul_of_nonneg_right ((hAYle y).trans (mul_le_mul_of_nonneg_left hy hK0)) hc₀pos.le
 
-set_option linter.unusedVariables false in
 /-- Step B.3 of `plan_main_theorem.md`: the marginal density `f_y(y) = ∫ f_n(y − A h) f(h) dh`
 is strictly positive for every `y` and every pdf `f`. The integrand is nonnegative
 (pointwise positivity of the Gaussian pdf); if the integral vanished, the integrand would be
 zero a.e., and since `f_n > 0` everywhere this forces `f = 0` a.e., contradicting
 `∫ f = 1`. -/
 theorem fy_pos (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) (A : Matrix (Fin n) (Fin n) ℝ)
-    (hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
+    (_hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : IsPdf f)
     (y : EuclideanSpace ℝ (Fin n)) : 0 < fyPDF n S hS A f y := by
   classical
   have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
@@ -3371,13 +3365,12 @@ theorem multivariateGaussianPDF_continuous (n : ℕ) (m : Fin n → ℝ) (Cov : 
   simp only [multivariateGaussianPDF]
   fun_prop
 
-set_option linter.unusedVariables false in
 /-- Step B.4 of `plan_main_theorem.md`: for a continuous pdf `f` the marginal density
 `f_y = ∫ f_n(y − A h) f(h) dh` is continuous in `y`, by dominated convergence in the
 parameter (the integrand is dominated by `c₀ · f` and continuous in `y` for each `h`). -/
 theorem fy_cont (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : IsPdf f) (hfc : Continuous f) : Continuous (fyPDF n S hS A f) := by
+    (A : Matrix (Fin n) (Fin n) ℝ) (_hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hf : IsPdf f) (_hfc : Continuous f) : Continuous (fyPDF n S hS A f) := by
   classical
   have h2pi : 0 < (2 * Real.pi) ^ ((n : ℝ) / 2) := by positivity
   have hSqrtpos : 0 < Real.sqrt S.det := Real.sqrt_pos.mpr hS.det_pos
@@ -3449,7 +3442,6 @@ theorem fy_cont (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
       (Filter.Eventually.of_forall fun x => Filter.Eventually.of_forall (hbnd x)) hbint
       (Filter.Eventually.of_forall fun h => (hcont h).continuousAt)
 
-set_option linter.unusedVariables false in
 /-- Step B.5 of `plan_main_theorem.md`: on every ball `‖y‖ ≤ r` the marginal density `f_y`
 admits a positive lower bound `m` (its minimum over the compact ball, by B.3 `fy_pos` and
 B.4 `fy_cont`). -/
@@ -3472,7 +3464,6 @@ theorem fy_min_pos (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     exact hy
   exact isMinOn_iff.mp hy₀min y hmem
 
-set_option linter.unusedVariables false in
 /-- Step B.6 of `plan_main_theorem.md`: for `K` large enough, the marginal density of the
 approximating model admits the uniform lower bound `m / 2` on every ball `‖y‖ ≤ r`, where
 `m` is the lower bound of `f_y` (B.5) and the convergence of `f_y^{(K)}` to `f_y` is
@@ -3506,7 +3497,6 @@ theorem fyK_lower_bound (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDe
     linarith
   linarith
 
-set_option linter.unusedVariables false in
 /-- Step B.2 of `plan_main_theorem.md` (generalization of `norm_mul_noiseDens_zero_le`):
 for every `y` the function `h ↦ ‖h‖ · f_n(y − A h)` is bounded by a positive constant
 (depending on `y` through `exp(κ‖y‖²)`). -/
@@ -3561,7 +3551,6 @@ theorem norm_mul_noiseDens_le (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S
       _ ≤ cS * Real.exp (κ * ‖y‖ ^ 2) * max 1 c⁻¹ :=
         mul_le_mul_of_nonneg_left (le_max_right _ _) (mul_nonneg hcS.le hfac)
 
-set_option linter.unusedVariables false in
 /-- Step B.2 of `plan_main_theorem.md` (last part): the `cme` integrand
 `fun h => ((noiseDens n S hS A y h * f h) / f_y(y)) • h` is Bochner integrable for every
 pdf `f` and every `y` (domination by `(C(y) / f_y(y)) • f`, using B.3 `fy_pos` and the
@@ -3631,7 +3620,6 @@ theorem cme_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef
   rw [h2]
   exact mul_le_mul_of_nonneg_right (hC h) (div_nonneg (hf.1 h) hfypos.le)
 
-set_option linter.unusedVariables false in
 /-- Step B.2 auxiliary: the posterior-moment integrand `fun h => (f_n(y − A h) f(h)) • h`
 is Bochner integrable (domination by `C(y) · f`, using `norm_mul_noiseDens_le`). -/
 theorem posterior_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
@@ -3677,7 +3665,6 @@ theorem posterior_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.
     _ = (‖h‖ * noiseDens n S hS A y h) * f h := by ring
     _ ≤ C * f h := mul_le_mul_of_nonneg_right (hC h) (hf.1 h)
 
-set_option linter.unusedVariables false in
 /-- Step B.2 auxiliary: the integrand `fun h => (f_n(y − A h) (fK − f)(h)) • h` is Bochner
 integrable (domination by `C(y) · (fK + f)`, using `norm_mul_noiseDens_le` and the triangle
 bound `|fK − f| ≤ fK + f` for nonnegative pdfs). -/
@@ -3744,7 +3731,6 @@ theorem posterior_diff_integrable (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS
     _ = (‖h‖ * noiseDens n S hS A y h) * (fK h + f h) := by ring
     _ ≤ C * (fK h + f h) := mul_le_mul_of_nonneg_right (hC h) (add_nonneg (hfK.1 h) (hf.1 h))
 
-set_option linter.unusedVariables false in
 /-- Step C.1 of `plan_main_theorem.md`: the two-term decomposition of the `cme` difference:
 for pdfs `f`, `fK` and `f_y^{(K)}(y) ≠ 0 ≠ f_y(y)`,
 
@@ -3849,7 +3835,6 @@ theorem cme_decomp (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
           (Filter.Eventually.of_forall fun h => by simp)
       rw [integral_add hIa' hIb', integral_smul _ _, integral_smul _ _]
 
-set_option linter.unusedVariables false in
 /-- Step C.2 of `plan_main_theorem.md` (first rate): if `f_y^{(K)}(y) ≠ 0` and the sup-norm
 bound `|f_h^{(K)} − f_h| ≤ ε` holds everywhere, then the first summand of `cme_decomp` is
 bounded by `(1/f_y^{(K)}(y)) · ε · ∫ ‖h‖ f_n(y − A h) dh` (the last factor is bounded
@@ -3857,7 +3842,7 @@ uniformly on balls by Step A.1 `noiseDens_moment_uniform`). -/
 theorem cme_rate_T1 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ)
     (hf : IsPdf f) (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
-    (y : EuclideanSpace ℝ (Fin n)) (hfyK : fyPDF n S hS A fK y ≠ 0) (ε : ℝ) (hε : 0 < ε)
+    (y : EuclideanSpace ℝ (Fin n)) (_hfyK : fyPDF n S hS A fK y ≠ 0) (ε : ℝ) (_hε : 0 < ε)
     (hδ : ∀ x, |fK x - f x| ≤ ε) :
     ‖(1 / fyPDF n S hS A fK y) •
           ∫ h : EuclideanSpace ℝ (Fin n), (noiseDens n S hS A y h * (fK h - f h)) • h ∂volume‖ ≤
@@ -3919,7 +3904,6 @@ theorem cme_rate_T1 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
           ∫ h : EuclideanSpace ℝ (Fin n), ‖h‖ * noiseDens n S hS A y h ∂volume :=
       by ring
 
-set_option linter.unusedVariables false in
 /-- Step C.2 of `plan_main_theorem.md` (second rate): if `f_y^{(K)}(y) ≠ 0` and
 `|f_y(y) − f_y^{(K)}(y)| ≤ ε` then the second summand of `cme_decomp` is bounded by
 `(ε/(f_y^{(K)}(y) f_y(y))) · ‖J(y)‖` (Step D bounds `‖J(y)‖` via
@@ -3927,7 +3911,7 @@ set_option linter.unusedVariables false in
 theorem cme_rate_T2 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
     (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (f : EuclideanSpace ℝ (Fin n) → ℝ)
     (hf : IsPdf f) (fK : EuclideanSpace ℝ (Fin n) → ℝ) (hfK : IsPdf fK)
-    (y : EuclideanSpace ℝ (Fin n)) (hfyK : fyPDF n S hS A fK y ≠ 0) (ε : ℝ)
+    (y : EuclideanSpace ℝ (Fin n)) (_hfyK : fyPDF n S hS A fK y ≠ 0) (ε : ℝ)
     (hδ : |fyPDF n S hS A f y - fyPDF n S hS A fK y| ≤ ε) :
     ‖((fyPDF n S hS A f y - fyPDF n S hS A fK y) / (fyPDF n S hS A fK y * fyPDF n S hS A f y)) •
           ∫ h : EuclideanSpace ℝ (Fin n), (noiseDens n S hS A y h * f h) • h ∂volume‖ ≤
@@ -3951,7 +3935,6 @@ theorem cme_rate_T2 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
       rw [div_le_iff₀ hpos, div_mul_cancel₀ _ hpos.ne']
       exact hδ
 
-set_option linter.unusedVariables false in
 /-
 Take a look at `cme_uniform_balls_eps` for the eps-delta formulation of locally uniform convergence.
 -/
@@ -3977,7 +3960,7 @@ public theorem main_theorem
     -- For every K, let fhK be a PDF.
     (hfhKpdf : ∀ K, IsPdf (fhK K))
     -- For every K, let fhK be continuous.
-    (hfhKcont : ∀ K, Continuous (fhK K))
+    (_hfhKcont : ∀ K, Continuous (fhK K))
     -- Let fhK converge uniformly to fh.
     (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
     -- Then we have locally uniform convergence:
@@ -4423,7 +4406,6 @@ theorem fy_min_pos_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef
     exact hy
   exact isMinOn_iff.mp hy₀min y hmem
 
-set_option linter.unusedVariables false in
 /-- **Track B**: uniform convergence of the rectangular marginal densities over **all** of
 `ℝ^m`, for every observation matrix `A : Matrix (Fin m) (Fin n) ℝ` (no rank hypothesis),
 under weighted-L¹ convergence of the priors. The hypothesis is phrased with the
@@ -4808,7 +4790,6 @@ theorem cme_integrable_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.Po
       exact h3.trans (le_of_eq (by ring))
     _ = (c₀ / fyPDFR m n S hS A f y) * (‖h‖ * f h) := by ring
 
-set_option linter.unusedVariables false in
 /-- Rectangular version of `cme_decomp` (Step C.1): the two-term decomposition of the
 `cmeR` difference. The finite-first-moment hypothesis `hfmom` makes the two `cme`
 integrand candidates integrable; `hintW` (the weighted-L¹ control of the prior
