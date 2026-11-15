@@ -3854,27 +3854,46 @@ theorem cme_rate_T2 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
       exact hδ
 
 set_option linter.unusedVariables false in
-/-- **Main result** (appendix_1.tex, `thm:main_result`): with `f_h` a continuous pdf,
-`f_n = N(0, Σ)` the Gaussian noise density, `A` invertible, and `f_h^{(K)}` a sequence of
-continuous pdfs converging uniformly to `f_h`, the conditional mean estimates
-`ĥ^{(K)}(y) = ∫ h f_n(y - A h) f_h^{(K)}(h) / f_y^{(K)}(y) dh` converge to
-`ĥ(y) = ∫ h f_n(y - A h) f_h(h) / f_y(y) dh` *uniformly on every closed ball*
-`B_r = {y : ‖y‖ ≤ r}`, `r > 0` — phrased as the `ℝ≥0∞`-supremum of the norm differences
-over the ball tending to `0`.
 
-The pointwise convergence of Eq. (pointwise_convergence) is the easy consequence
-`cme_pointwise_convergence` below. -/
-public theorem main_theorem (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (hA : IsUnit A.det) (fh : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhpdf : IsPdf fh) (hfhcont : Continuous fh) (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
-    (hfhKpdf : ∀ K, IsPdf (fhK K)) (hfhKcont : ∀ K, Continuous (fhK K))
+/-
+Take a look at `cme_uniform_balls_eps` for the eps-delta formulation of locally uniform convergence.
+-/
+public theorem main_theorem
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Let S be an n-by-n matrix.
+    (S : Matrix (Fin n) (Fin n) ℝ)
+    -- Let S be positive definite. (S is the noise covariance matrix.)
+    (hS : S.PosDef)
+    -- Let A be an n-by-n matrix.
+    (A : Matrix (Fin n) (Fin n) ℝ)
+    -- Let A be invertible.
+    (hA : IsUnit A.det)
+    -- Let fh be a function from R^n to R.
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let fh be a PDF.
+    (hfhpdf : IsPdf fh)
+    -- Let fh be continuous.
+    (hfhcont : Continuous fh)
+    -- For every K, let fhK be a function from R^n to R.
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    -- For every K, let fhK be a PDF.
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    -- For every K, let fhK be continuous.
+    (hfhKcont : ∀ K, Continuous (fhK K))
+    -- Let fhK converge uniformly to fh.
     (hconv : ∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀, ∀ x, |fh x - fhK K x| < ε) :
+    -- We have locally uniform convergence.
+    -- For every radius r > 0,
     ∀ r : ℝ,
       0 < r →
         Tendsto
           (fun K =>
+            -- the supremum over the closed ball around 0 with radius r
             ⨆ y ∈ Metric.closedBall 0 r,
+              -- of the norm of the CME difference
               ENNReal.ofReal ‖cme n S hS A fh y - cme n S hS A (fhK K) y‖)
+          -- tends to 0 as K → ∞.
           atTop (nhds 0) := by
   classical
   intro r hr
