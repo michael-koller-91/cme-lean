@@ -52,6 +52,11 @@ theorem main_theorem
           atTop (nhds 0)
 ```
 
+The maybe more familiar epsilon-delta formulation of locally uniform convergence is stated in the corollary `cme_uniform_balls_eps`.
+
+Pointwise convergence of the CME is an immediate consequence of the main theorem and can be found as `cme_pointwise_convergence`.
+
+A generalization of the main theorem to arbitrary compact sets is given by `cme_uniform_compact` (with epsilon-delta formulation `cme_uniform_compact_eps`).
 
 ## Miscellaneous Notes
 
