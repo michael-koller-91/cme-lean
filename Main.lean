@@ -10,8 +10,18 @@ public import Mathlib.MeasureTheory.Function.Jacobian
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
 open scoped Matrix MatrixOrder ENNReal
 
-noncomputable def multivariateGaussianPDF (n : ℕ) (mean : Fin n → ℝ)
-    (Cov : Matrix (Fin n) (Fin n) ℝ) (_ : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) : ℝ :=
+noncomputable def multivariateGaussianPDF
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Mean vector in R^n.
+    (mean : Fin n → ℝ)
+    -- Covariance matrix in R^{n × n}.
+    (Cov : Matrix (Fin n) (Fin n) ℝ)
+    -- The covariance matrix should be positive definite.
+    (_ : Cov.PosDef)
+    -- The argument of the PDF lives in Eucledian R^n.
+    (x : EuclideanSpace ℝ (Fin n)) : ℝ :=
+  -- The usual multivariate Gaussian PDF formula.
   let d := x - mean
   let quadForm := (mulVec (Cov⁻¹) d) ⬝ᵥ d
   let normalization := ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt (Cov.det))⁻¹
@@ -3854,7 +3864,6 @@ theorem cme_rate_T2 (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
       exact hδ
 
 set_option linter.unusedVariables false in
-
 /-
 Take a look at `cme_uniform_balls_eps` for the eps-delta formulation of locally uniform convergence.
 -/

@@ -2,7 +2,7 @@
 
 This is a Lean 4 (Mathlib) formalization of **Theorem 2** of the paper
 
-> M. Koller, B. Fesl, N. Turan and W. Utschick, "An Asymptotically MSE-Optimal
+> M. Koller, B. Fesl, N. Turan, and W. Utschick, "An Asymptotically MSE-Optimal
 > Estimator Based on Gaussian Mixture Models," *IEEE Transactions on Signal
 > Processing*, 2022.
 
