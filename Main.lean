@@ -10,6 +10,11 @@ public import Mathlib.MeasureTheory.Function.Jacobian
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
 open scoped Matrix MatrixOrder ENNReal
 
+--
+-- definitions
+--
+
+/-- The multivariate Gaussian probability density function. -/
 noncomputable def multivariateGaussianPDF
     -- Let n be a natural number.
     (n : ℕ)
@@ -26,6 +31,124 @@ noncomputable def multivariateGaussianPDF
   let quadForm := (mulVec (Cov⁻¹) d) ⬝ᵥ d
   let normalization := ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt (Cov.det))⁻¹
   normalization * Real.exp (-(quadForm / 2))
+
+/-- The Gaussian noise density `n ~ N(0, S)` evaluated along the affine map `h ↦ y - A h`. -/
+noncomputable def noiseDens
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Let S be a matrix in R^{n × n}.
+    (S : Matrix (Fin n) (Fin n) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{n × n}.
+    (A : Matrix (Fin n) (Fin n) ℝ)
+    -- Let y be a vector in R^n.
+    (y : EuclideanSpace ℝ (Fin n))
+    -- Let h be a vector in R^n.
+    (h : EuclideanSpace ℝ (Fin n)) : ℝ :=
+  multivariateGaussianPDF n (0 : Fin n → ℝ) S hS
+    (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
+
+/-- The observation density induced by the measurement model `y = A h + n` with independent Gaussian noise `n ~ N(0, S)`.
+Convolution after the change of variables `s = y - A h`: `f_y(y) = ∫ f_n(y - A h) f(h) dh`. -/
+noncomputable def fyPDF
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Let S be a matrix in R^{n × n}.
+    (S : Matrix (Fin n) (Fin n) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{n × n}.
+    (A : Matrix (Fin n) (Fin n) ℝ)
+    -- Let f be a function from R^n to R.
+    (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let y be a vector in R^n.
+    (y : EuclideanSpace ℝ (Fin n)) : ℝ :=
+  -- Note that `noiseDens` does the flip `y - A h`.
+  ∫ h : EuclideanSpace ℝ (Fin n), noiseDens n S hS A y h * f h ∂volume
+
+/-- The conditional mean estimate associated with a pdf `f` in the model `y = A h + n`.
+This is a Bochner integral of a `EuclideanSpace ℝ (Fin n)`-valued integrand.
+For `f := fhK K` this is `ĥ^{(K)}` and for `f := fh` this is `ĥ`. -/
+public noncomputable def cme
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Let S be a matrix in R^{n × n}.
+    (S : Matrix (Fin n) (Fin n) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{n × n}.
+    (A : Matrix (Fin n) (Fin n) ℝ)
+    -- Let f be a function from R^n to R.
+    (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let y be a vector in R^n.
+    (y : EuclideanSpace ℝ (Fin n)) : EuclideanSpace ℝ (Fin n) :=
+  -- `∫ h · f_n(y - A h) f(h) / f_y(y) dh`, where `f_y` is the observation density `fyPDF` induced by `f`.
+  ∫ h : EuclideanSpace ℝ (Fin n), ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h
+
+/-- Rectangular noise density: the Gaussian `f_n = N(0, S)` on `ℝ^m` evaluated at
+`y − A h`, for an observation matrix `A : ℝ^n → ℝ^m`. -/
+noncomputable def noiseDensR
+    -- Let m, n be natural numbers.
+    (m n : ℕ)
+    -- Let S be a matrix in R^{m × m}.
+    (S : Matrix (Fin m) (Fin m) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{m × n}.
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    -- Let y be a vector in R^m.
+    (y : EuclideanSpace ℝ (Fin m))
+    -- Let h be a vector in R^n.
+    (h : EuclideanSpace ℝ (Fin n)) : ℝ :=
+  multivariateGaussianPDF m (0 : Fin m → ℝ) S hS
+    (WithLp.toLp 2 ((y : Fin m → ℝ) - A.mulVec (h : Fin n → ℝ)))
+
+/-- Rectangular marginal density `f_y(y) = ∫ f_n(y − A h) f(h) dh`. -/
+noncomputable def fyPDFR
+    -- Let m, n be natural numbers.
+    (m n : ℕ)
+    -- Let S be a matrix in R^{m × m}.
+    (S : Matrix (Fin m) (Fin m) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{m × n}.
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    -- Let f be a function from R^n to R.
+    (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let y be a vector in R^m.
+    (y : EuclideanSpace ℝ (Fin m)) : ℝ :=
+  -- Note that `noiseDensR` does the flip `y - A h`.
+  ∫ h : EuclideanSpace ℝ (Fin n), noiseDensR m n S hS A y h * f h ∂volume
+
+/-- Rectangular conditional mean estimate `ĥ(y) = ∫ h f_n(y − A h) f(h) / f_y(y) dh ∈ ℝ^n`. -/
+noncomputable def cmeR
+    -- Let m, n be natural numbers.
+    (m n : ℕ)
+    -- Let S be a matrix in R^{m × m}.
+    (S : Matrix (Fin m) (Fin m) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{m × n}.
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    -- Let f be a function from R^n to R.
+    (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let y be a vector in R^m.
+    (y : EuclideanSpace ℝ (Fin m)) : EuclideanSpace ℝ (Fin n) :=
+  ∫ h : EuclideanSpace ℝ (Fin n), ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h
+
+/-- `f` is a probability density function w.r.t. `volume` on `EuclideanSpace ℝ (Fin n)`: nonnegative with total mass `1`. -/
+public def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
+  0 ≤ f ∧ ∫ x, f x ∂volume = 1
+
+/-- `f` vanishes at infinity: `f x → 0` as `x` leaves every compact set. On the proper space
+`EuclideanSpace ℝ (Fin n)` this is equivalent to `f x → 0` as `‖x‖ → ∞`. -/
+def VanishesAtInfinity (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
+  Tendsto f (cocompact (EuclideanSpace ℝ (Fin n))) (nhds 0)
+
+--
+-- theorems
+--
 
 /-- `(Aᵀ)⁻¹ = (A⁻¹)ᵀ` for a matrix with unit determinant, used to give the transposed matrix of
 the change of variables `h ↦ y - A h` a unit. -/
@@ -975,13 +1098,6 @@ shows: uniform convergence of `f_h^{(K)}` to `f_h` implies uniform convergence o
 observation densities, with quantitative bound
 `|f_y(y) - f_y^{(K)}(y)| ≤ ‖f_h - f_h^{(K)}‖_∞ / |det A|`. -/
 
-/-- The Gaussian noise density `n ~ N(0, S)` evaluated along the affine map `h ↦ y - A h`. -/
-noncomputable def noiseDens (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (y : EuclideanSpace ℝ (Fin n)) (h : EuclideanSpace ℝ (Fin n)) :
-    ℝ :=
-  multivariateGaussianPDF n (0 : Fin n → ℝ) S hS
-    (WithLp.toLp 2 ((y : Fin n → ℝ) - A.mulVec (h : Fin n → ℝ)))
-
 /-- Pointwise identity of `noiseDens` with the Gaussian pdf evaluated at the linear-map form
 `y + (-A) h` (the shape required by `integral_subst_unit`). -/
 theorem noiseDens_eq (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
@@ -1147,14 +1263,6 @@ theorem multivariateGaussianPDF_le_const (n : ℕ) (m : Fin n → ℝ) (Cov : Ma
   have hbound := mul_le_mul_of_nonneg_left hexp hc₀.le
   rwa [mul_one] at hbound
 
-/-- The observation density induced by the measurement model `y = A h + n` with independent
-Gaussian noise `n ~ N(0, S)` (appendix_1.tex, Eq. (convolution) after the change of variables
-`s = y - A h`): `f_y(y) = ∫ f_n(y - A h) f(h) dh`. For a pdf `f` this is the density of `y`. -/
-noncomputable def fyPDF (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (y : EuclideanSpace ℝ (Fin n)) : ℝ :=
-  ∫ h : EuclideanSpace ℝ (Fin n), noiseDens n S hS A y h * f h ∂volume
-
 /-- Uniform convergence transfer (appendix_1.tex, first part of the proof of the main result):
 if `f_h^{(K)} → f_h` uniformly then `f_y^{(K)} → f_y` uniformly, where
 `f_y(y) = ∫ f_n(y - A h) f(h) dh`. Only integrability of the densities is assumed; the
@@ -1274,11 +1382,6 @@ needed of `f_h` and every `f_h^{(K)}` for the convergence transfer is that they 
 (nonnegative with total mass 1); continuity and vanishing at infinity are recorded as separate
 hypotheses on `f_h` to match the setting of `appendix_1.tex`. -/
 
-/-- `f` is a probability density function w.r.t. `volume` on `EuclideanSpace ℝ (Fin n)`:
-nonnegative with total mass `1`. -/
-public def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
-  0 ≤ f ∧ ∫ x, f x ∂volume = 1
-
 /-- A pdf is integrable: in Mathlib's definition of the Lebesgue integral, a function with
 nonzero integral is automatically integrable (non-integrable functions have integral `0`). -/
 theorem integrable_of_isPdf {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ} (hf : IsPdf f) :
@@ -1286,11 +1389,6 @@ theorem integrable_of_isPdf {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ} (
   Integrable.of_integral_ne_zero
     (by
       rw [hf.2]; norm_num)
-
-/-- `f` vanishes at infinity: `f x → 0` as `x` leaves every compact set. On the proper space
-`EuclideanSpace ℝ (Fin n)` this is equivalent to `f x → 0` as `‖x‖ → ∞`. -/
-def VanishesAtInfinity (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
-  Tendsto f (cocompact (EuclideanSpace ℝ (Fin n))) (nhds 0)
 
 set_option linter.unusedVariables false in
 /-- Uniform convergence of the observation densities for a uniformly convergent sequence of
@@ -2417,16 +2515,6 @@ Notes on the formalization:
   (one definition `cme`, instantiated twice).
 * Division by `f_y^{(K)}(y)` is total in `ℝ`; positivity of `f_y^{(K)}` (proved in the
   appendix) is a fact about the construction, not a hypothesis of the statement. -/
-
-/-- The conditional mean estimate associated with a pdf `f` in the model `y = A h + n`
-(appendix_1.tex, Eq. (cme)): `y ↦ ∫ h · f_n(y - A h) f(h) / f_y(y) dh`, where
-`f_y` is the observation density `fyPDF` induced by `f`. This is a Bochner integral of an
-`EuclideanSpace ℝ (Fin n)`-valued integrand. For `f := fhK K` this is `ĥ^{(K)}` and for
-`f := fh` this is `ĥ`. -/
-public noncomputable def cme (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin n) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (y : EuclideanSpace ℝ (Fin n)) : EuclideanSpace ℝ (Fin n) :=
-  ∫ h : EuclideanSpace ℝ (Fin n), ((noiseDens n S hS A y h * f h) / fyPDF n S hS A f y) • h
 
 /-! ## Step B.1 of `plan_main_theorem.md`: quantitative Gaussian domination -/
 
@@ -4157,20 +4245,6 @@ since the real Bochner integral of a non-integrable nonnegative function vanishe
 Mathlib (non-integrable functions have integral `0`), which would make a real-integral
 hypothesis vacuous. -/
 
-/-- Rectangular noise density: the Gaussian `f_n = N(0, S)` on `ℝ^m` evaluated at
-`y − A h`, for an observation matrix `A : ℝ^n → ℝ^m`. -/
-noncomputable def noiseDensR (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin m) (Fin n) ℝ) (y : EuclideanSpace ℝ (Fin m)) (h : EuclideanSpace ℝ (Fin n)) :
-    ℝ :=
-  multivariateGaussianPDF m (0 : Fin m → ℝ) S hS
-    (WithLp.toLp 2 ((y : Fin m → ℝ) - A.mulVec (h : Fin n → ℝ)))
-
-/-- Rectangular marginal density `f_y(y) = ∫ f_n(y − A h) f(h) dh`. -/
-noncomputable def fyPDFR (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (y : EuclideanSpace ℝ (Fin m)) : ℝ :=
-  ∫ h : EuclideanSpace ℝ (Fin n), noiseDensR m n S hS A y h * f h ∂volume
-
 /-- Pointwise identity of the rectangular noise density with the Gaussian pdf evaluated
 at the linear-map form `y + (−A) h`. -/
 theorem noiseDensR_eq (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
@@ -4501,13 +4575,6 @@ translation `h = h' + A⁻¹y`, and the decay `‖h‖ · f_n(y − A h) ≤ C(y
 the `c₀`-domination plus a finite-first-moment hypothesis on the prior
 `∫ ‖h‖ f(h) dh < ∞` (without which the posterior mean itself may fail to exist), together
 with the weighted-L¹ convergence of the priors from Track B. -/
-
-/-- Rectangular conditional mean estimate
-`ĥ(y) = ∫ h f_n(y − A h) f(h) / f_y(y) dh ∈ ℝ^n`. -/
-noncomputable def cmeR (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin m) (Fin n) ℝ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (y : EuclideanSpace ℝ (Fin m)) : EuclideanSpace ℝ (Fin n) :=
-  ∫ h : EuclideanSpace ℝ (Fin n), ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h
 
 /-- Bridge from the eventually-bounded sup-form to the `Tendsto` form (the generalization
 of the ending of `main_theorem`, reusable for any uniform-convergence statement whose
