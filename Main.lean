@@ -4946,23 +4946,39 @@ theorem cme_decomp_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef
           (Filter.Eventually.of_forall fun h => by simp)
       rw [integral_add hIa' hIb', integral_smul _ _, integral_smul _ _]
 
-set_option linter.unusedVariables false in
 /-- **The rectangular main theorem (Track C)**: for `m < n` (underdetermined model
 `y = A h + n` with an *arbitrary* observation matrix `A : Matrix (Fin m) (Fin n) ℝ`), and
 priors `f^{(K)} → f` converging in the weighted-L¹ sense together with a finite first
 moment of the limit prior, the conditional mean estimates `ĥ^{(K)}(y)` converge to `ĥ(y)`
 uniformly on every ball in `ℝ^m`. -/
-theorem cme_uniform_balls_R (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ) (hS : S.PosDef)
-    (A : Matrix (Fin m) (Fin n) ℝ) (fh : EuclideanSpace ℝ (Fin n) → ℝ) (hfhpdf : IsPdf fh)
+theorem cme_uniform_balls_R
+    -- Let m, n be natural numbers.
+    (m n : ℕ)
+    -- Let S be a matrix in R^{m × m}.
+    (S : Matrix (Fin m) (Fin m) ℝ)
+    -- Let S be positive definite.
+    (hS : S.PosDef)
+    -- Let A be a matrix in R^{m × n}.
+    (A : Matrix (Fin m) (Fin n) ℝ)
+    -- Let fh be a function from R^n to R.
+    (fh : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let fh be a PDF.
+    (hfhpdf : IsPdf fh)
+    -- Let fh have finite first moment.
     (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * fh h) volume)
-    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ) (hfhKpdf : ∀ K, IsPdf (fhK K))
+    -- For every K, let fhK be a function from R^n to R.
+    (fhK : ℕ → EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let fhK be a PDF.
+    (hfhKpdf : ∀ K, IsPdf (fhK K))
+    -- Weighted L¹ convergence of fhK to fh.
     (hw :
       ∀ ε > 0,
         ∃ K₀ : ℕ,
           ∀ K ≥ K₀,
-            ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume <
-              ENNReal.ofReal ε)
+            ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume < ENNReal.ofReal ε)
+    -- Let r > 0 be a radius.
     (r : ℝ) (hr : 0 < r) :
+    -- Then we have locally uniform convergence.
     Tendsto
       (fun K =>
         ⨆ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
