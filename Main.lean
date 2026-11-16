@@ -395,7 +395,7 @@ theorem stdGaussian_eq_withDensity {ι : Type*} [Fintype ι] :
 `B` with positive determinant, pulling the integrand back along `x ↦ μ + B x` scales the
 integral by `B.det` (Step 3 of `plan_integral_norm_gaussian_bounded.md`: the substitution
 `x ↦ μ + √Σ x` in the Fourier integral of the Gaussian density). -/
-theorem integral_subst {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F] [NormedSpace ℝ F]
+public theorem integral_subst {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F] [NormedSpace ℝ F]
     [CompleteSpace F] [OpensMeasurableSpace F] [TopologicalSpace.PseudoMetrizableSpace F]
     [SecondCountableTopology F] (n : ℕ) (μ : EuclideanSpace ℝ (Fin n))
     (B : Matrix (Fin n) (Fin n) ℝ) (hBdet : 0 < B.det) (f : EuclideanSpace ℝ (Fin n) → F)
