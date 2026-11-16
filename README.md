@@ -77,5 +77,5 @@ A generalization of the main theorem to arbitrary compact sets is given by `cme_
 
 ```console
 lean-fmt format
-lake env lean Printer.lean
+lake env lean AxiomCheck.lean
 ```
