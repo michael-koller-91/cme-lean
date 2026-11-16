@@ -342,3 +342,215 @@ public theorem cme_convergence_of_gmm_prior (m n k : ℕ) (S : Matrix (Fin m) (F
       atTop (nhds 0) :=
   cme_uniform_balls_R m n S hS A (gmmPDF n k Cov hC w μ) (isPdf_gmmPDF n k Cov hC w μ hw)
     (integrable_norm_mul_gmmPDF n k Cov hC w μ) fhK hfhKpdf hconv r hr
+
+/-! ## Phase 1 of `plan.md`: the Gaussian-smoothed (continuum-mixture) sequence satisfies
+the weighted-L¹ hypothesis `hw`
+
+For a **continuous** pdf `f` with finite first moment and a fixed positive definite
+covariance `C`, the Gaussian-smoothed priors `gaussSmoothed n f C hC σ hσ` (with
+`σ = 1/(K+1) → 0`) converge to `f` in weighted L¹:
+`∫ (1 + ‖x‖) |f x - gaussSmoothed ... x| ∂volume → 0`. Each `gaussSmoothed` is a pdf, so
+the hypothesis `hw` of `cme_uniform_balls_R` is satisfiable by (continuum) mixtures of
+Gaussians. The restriction to continuous `f` matches the paper's class `C₀` setting
+(continuity is what makes the translation-modulus argument a plain dominated
+convergence); the general case is deferred (see `plan.md`). -/
+
+/-- The scaled Gaussian mollifier `ψ_σ = σ^{-n} · φ_C(·/σ)` for a fixed positive definite
+covariance `C` (the density of `N(0, σ² C)`). -/
+public noncomputable def mollifier (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (_hσ : 0 < σ) : EuclideanSpace ℝ (Fin n) → ℝ :=
+  fun x => (σ : ℝ)⁻¹ ^ n *
+    multivariateGaussianPDF n 0 C hC (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (x : Fin n → ℝ)))
+
+/-- The Gaussian-smoothed prior: the (continuum) mixture
+`x ↦ ∫ ψ_σ(u) · f (x − u) du`. -/
+public noncomputable def gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (_hσ : 0 < σ) :
+    EuclideanSpace ℝ (Fin n) → ℝ :=
+  fun x => ∫ u : EuclideanSpace ℝ (Fin n),
+    mollifier n C hC σ _hσ u * f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) ∂volume
+
+/-- Transport for scalar-multiple identity matrices. -/
+theorem toEuclideanLin_smul_one (n : ℕ) (r : ℝ) (x : EuclideanSpace ℝ (Fin n)) :
+    Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) (r • (1 : Matrix (Fin n) (Fin n) ℝ)) x
+      = WithLp.toLp 2 (r • (x : Fin n → ℝ)) := by
+  apply WithLp.ofLp_injective
+  show (r • (1 : Matrix (Fin n) (Fin n) ℝ)).mulVec (x : Fin n → ℝ) = r • (x : Fin n → ℝ)
+  rw [Matrix.smul_mulVec, Matrix.one_mulVec]
+
+theorem mollifier_nonneg (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ)
+    (hσ : 0 < σ) (x : EuclideanSpace ℝ (Fin n)) : 0 ≤ mollifier n C hC σ hσ x := by
+  simp only [mollifier]
+  exact mul_nonneg (le_of_lt (pow_pos (inv_pos.mpr hσ) n))
+    (le_of_lt (multivariateGaussianPDF_pos n 0 C hC _))
+
+/-- Mass of the mollifier: `∫ ψ_σ = 1` (change of variables `x ↦ σ⁻¹ • x` via
+`integral_subst`). -/
+theorem integral_mollifier (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (hσ : 0 < σ) :
+    ∫ x : EuclideanSpace ℝ (Fin n), mollifier n C hC σ hσ x ∂volume = 1 := by
+  classical
+  simp only [mollifier]
+  have hBdet : 0 < ((σ : ℝ)⁻¹ • (1 : Matrix (Fin n) (Fin n) ℝ)).det := by
+    rw [Matrix.det_smul, Matrix.det_one, Fintype.card_fin, mul_one]
+    exact pow_pos (inv_pos.mpr hσ) n
+  have hsub := integral_subst n 0 ((σ : ℝ)⁻¹ • (1 : Matrix (Fin n) (Fin n) ℝ)) hBdet
+    (fun x : EuclideanSpace ℝ (Fin n) => multivariateGaussianPDF n 0 C hC x)
+    (measurable_multivariateGaussianPDF n 0 C hC).aemeasurable
+  rw [integral_gaussianPDF n 0 C hC, smul_eq_mul, Matrix.det_smul, Matrix.det_one,
+    Fintype.card_fin, mul_one] at hsub
+  simp only [zero_add] at hsub
+  rw [integral_congr_ae (Filter.Eventually.of_forall fun x => by
+    rw [toEuclideanLin_smul_one])] at hsub
+  have hinner : ∫ x : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n 0 C hC (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (x : Fin n → ℝ))) ∂volume
+      = (σ : ℝ) ^ n := by
+    have h2 : (σ : ℝ) ^ n * 1
+        = (σ : ℝ) ^ n * ((σ : ℝ)⁻¹ ^ n * ∫ x : EuclideanSpace ℝ (Fin n),
+            multivariateGaussianPDF n 0 C hC
+              (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (x : Fin n → ℝ))) ∂volume) := by
+      rw [← hsub]
+    rw [mul_one, ← mul_assoc, inv_pow, mul_inv_cancel₀ (pow_ne_zero n (ne_of_gt hσ)), one_mul] at h2
+    exact h2.symm
+  rw [integral_const_mul, hinner, inv_pow, inv_mul_cancel₀ (pow_ne_zero n (ne_of_gt hσ))]
+
+/-- `∫ ψ_σ(u) · H u du = ∫ φ_C(v) · H (σ v) dv`: the transport used for the dominated
+convergence in the smoothing theorem (change of variables `u ↦ σ v` via
+`integral_subst`). -/
+theorem integral_mollifier_mul (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (hσ : 0 < σ) (H : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hH : AEMeasurable H volume) :
+    ∫ u : EuclideanSpace ℝ (Fin n), mollifier n C hC σ hσ u * H u ∂volume
+      = ∫ v : EuclideanSpace ℝ (Fin n),
+          multivariateGaussianPDF n 0 C hC v *
+            H (WithLp.toLp 2 ((σ : ℝ) • (v : Fin n → ℝ))) ∂volume := by
+  classical
+  simp only [mollifier, mul_assoc, MeasureTheory.integral_const_mul]
+  have hpdfS : AEMeasurable
+      (fun u : EuclideanSpace ℝ (Fin n) =>
+        multivariateGaussianPDF n 0 C hC
+          (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ)))) volume :=
+    ((measurable_multivariateGaussianPDF n 0 C hC).comp
+      (by fun_prop : Measurable fun u : EuclideanSpace ℝ (Fin n) =>
+        WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ)))).aemeasurable
+  have hFmeas : AEMeasurable
+      (fun u : EuclideanSpace ℝ (Fin n) =>
+        (σ : ℝ)⁻¹ ^ n * multivariateGaussianPDF n 0 C hC
+            (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ))) * H u) volume :=
+    (hpdfS.const_mul ((σ : ℝ)⁻¹ ^ n)).mul hH
+  have hBdet : 0 < ((σ : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ)).det := by
+    rw [Matrix.det_smul, Matrix.det_one, Fintype.card_fin, mul_one]
+    exact pow_pos hσ n
+  have htr : ∀ v : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n 0 C hC
+        (WithLp.toLp 2 ((σ : ℝ)⁻¹ •
+          ((Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((σ : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ)))
+            v : Fin n → ℝ)))
+      = multivariateGaussianPDF n 0 C hC v := by
+    intro v
+    congr 1
+    rw [toEuclideanLin_smul_one, WithLp.ofLp_toLp, ← mul_smul,
+      inv_mul_cancel₀ (ne_of_gt hσ), one_smul]
+  have hsub := integral_subst n 0 ((σ : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ)) hBdet
+    (fun u : EuclideanSpace ℝ (Fin n) =>
+      (σ : ℝ)⁻¹ ^ n * multivariateGaussianPDF n 0 C hC
+          (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ))) * H u) hFmeas
+  rw [Matrix.det_smul, Matrix.det_one, Fintype.card_fin, mul_one] at hsub
+  simp only [zero_add, htr, smul_eq_mul, mul_assoc] at hsub
+  simp only [MeasureTheory.integral_const_mul] at hsub
+  rw [hsub, ← mul_assoc, inv_pow, mul_inv_cancel₀ (pow_ne_zero n (ne_of_gt hσ)), one_mul]
+  have hpt : ∀ v : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n 0 C hC v * H ((toEuclideanLin (σ • 1)) v)
+        = multivariateGaussianPDF n 0 C hC v *
+            H (WithLp.toLp 2 ((σ : ℝ) • (v : Fin n → ℝ))) := by
+    intro v
+    rw [toEuclideanLin_smul_one]
+  exact integral_congr_ae (Filter.Eventually.of_forall fun v => hpt v)
+
+/-- Bochner integrability is invariant under the map `h ↦ toLp 2 (c - h)` (the
+composition of the reflection and a translation, both `volume`-preserving). -/
+theorem integrable_toLp_sub {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F]
+    [NormedSpace ℝ F] [CompleteSpace F] [OpensMeasurableSpace F]
+    [TopologicalSpace.PseudoMetrizableSpace F] [SecondCountableTopology F] (n : ℕ)
+    (c : Fin n → ℝ) (g : EuclideanSpace ℝ (Fin n) → F)
+    (hg : MeasureTheory.Integrable g volume) (hgmeas : Measurable g) :
+    MeasureTheory.Integrable
+      (fun h : EuclideanSpace ℝ (Fin n) =>
+        g (WithLp.toLp 2 ((c : Fin n → ℝ) - (h : Fin n → ℝ)))) volume := by
+  classical
+  have hLdet : |(LinearMap.det
+      (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ))))| = 1 := by
+    rw [Matrix.toEuclideanLin_eq_toLin_orthonormal, LinearMap.det_toLin, Matrix.det_smul,
+      Matrix.det_one, Fintype.card_fin, abs_mul, abs_pow, abs_neg, abs_one, one_pow, mul_one]
+  have hLne : (LinearMap.det
+      (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ)))) ≠ 0 := by
+    rw [Matrix.toEuclideanLin_eq_toLin_orthonormal, LinearMap.det_toLin, Matrix.det_smul,
+      Matrix.det_one, Fintype.card_fin, mul_one]
+    exact pow_ne_zero n (neg_ne_zero.mpr one_ne_zero)
+  have hLabs : |(LinearMap.det
+      (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ))))| = 1 := by
+    rw [Matrix.toEuclideanLin_eq_toLin_orthonormal, LinearMap.det_toLin, Matrix.det_smul,
+      Matrix.det_one, Fintype.card_fin, abs_mul, abs_pow, abs_neg, abs_one, one_pow, mul_one]
+  have hTneg : Measurable
+      (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (-(h : Fin n → ℝ))) := by
+    have heq : (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (-(h : Fin n → ℝ)))
+        = fun h : EuclideanSpace ℝ (Fin n) =>
+            WithLp.toLp 2 (0 : Fin n → ℝ) - WithLp.toLp 2 (h : Fin n → ℝ) := by
+      funext h
+      rw [← zero_sub, WithLp.toLp_sub]
+    rw [heq]
+    exact Measurable.sub measurable_const measurable_id
+  have hTnegmap : MeasureTheory.Measure.map
+      (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (-(h : Fin n → ℝ))) volume = volume := by
+    rw [show (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (-(h : Fin n → ℝ)))
+        = Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((-1 : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ))
+      from by
+        funext h
+        apply WithLp.ofLp_injective
+        show (-(h : Fin n → ℝ) : Fin n → ℝ) =
+          ((-1 : ℝ) • (1 : Matrix (Fin n) (Fin n) ℝ)).mulVec (h : Fin n → ℝ)
+        rw [Matrix.smul_mulVec, Matrix.one_mulVec, neg_one_smul],
+      MeasureTheory.Measure.map_linearMap_addHaar_eq_smul_addHaar volume hLne,
+      abs_inv, hLabs, inv_one, ENNReal.ofReal_one, one_smul]
+  have hTmeas : Measurable
+      (fun h : EuclideanSpace ℝ (Fin n) =>
+        WithLp.toLp 2 ((c : Fin n → ℝ) - (h : Fin n → ℝ))) := by
+    have heq : (fun h : EuclideanSpace ℝ (Fin n) =>
+          WithLp.toLp 2 ((c : Fin n → ℝ) - (h : Fin n → ℝ)))
+        = fun h : EuclideanSpace ℝ (Fin n) =>
+            WithLp.toLp 2 (c : Fin n → ℝ) - WithLp.toLp 2 (h : Fin n → ℝ) := by
+      funext h
+      rw [WithLp.toLp_sub]
+    rw [heq]
+    exact Measurable.sub measurable_const measurable_id
+  have hTmeasOut : Measurable
+      (fun z : EuclideanSpace ℝ (Fin n) =>
+        WithLp.toLp 2 ((c : Fin n → ℝ) + (z : Fin n → ℝ))) := by
+    have heq : (fun z : EuclideanSpace ℝ (Fin n) =>
+          WithLp.toLp 2 ((c : Fin n → ℝ) + (z : Fin n → ℝ)))
+        = fun z : EuclideanSpace ℝ (Fin n) =>
+            WithLp.toLp 2 (c : Fin n → ℝ) + WithLp.toLp 2 (z : Fin n → ℝ) := by
+      funext z
+      rw [WithLp.toLp_add]
+    rw [heq]
+    exact Measurable.add measurable_const measurable_id
+  have hTmap : MeasureTheory.Measure.map
+      (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 ((c : Fin n → ℝ) - (h : Fin n → ℝ)))
+      volume = volume := by
+    have hcomp : (fun h : EuclideanSpace ℝ (Fin n) =>
+        WithLp.toLp 2 ((c : Fin n → ℝ) - (h : Fin n → ℝ)))
+      = (fun z : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 ((c : Fin n → ℝ) + (z : Fin n → ℝ))) ∘
+        (fun h : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (-(h : Fin n → ℝ))) := by
+      funext h
+      congr 1
+    have heqO : (fun z : EuclideanSpace ℝ (Fin n) =>
+          WithLp.toLp 2 ((c : Fin n → ℝ) + (z : Fin n → ℝ)))
+        = fun x : EuclideanSpace ℝ (Fin n) => WithLp.toLp 2 (c : Fin n → ℝ) + x := by
+      funext z
+      rw [WithLp.toLp_add, WithLp.ofLp_toLp]
+    rw [hcomp, ← MeasureTheory.Measure.map_map hTmeasOut hTneg, hTnegmap, heqO,
+      MeasureTheory.map_add_left_eq_self volume (WithLp.toLp 2 c)]
+  refine ⟨(hgmeas.comp hTmeas).aestronglyMeasurable, ?_⟩
+  rw [MeasureTheory.hasFiniteIntegral_iff_enorm, ← lintegral_map hgmeas.enorm hTmeas,
+    hTmap]
+  exact hg.2
