@@ -296,6 +296,26 @@ of the goal (obtained by `have h := lemma...` then rewriting `at h`), or use
 works. `(0 ≤ f)`-hypotheses are function-≤; `integral_nonneg hwnonneg` works directly but
 `fun x => mul_nonneg ...` inline may need a separate typed `have`.
 
+**DONE in the latest round (all compiling; `isPdf_gaussSmoothed` has ONE `sorry` for its
+mass-component):**
+1. `integral_shift_neg` / `lintegral_shift_neg`: translation invariance in the `y − c` form
+   (the `rw [sub_eq_add_neg]`-under-binders trap avoided by the `funext`-rewrite of the
+   whole function, applied to free variables only).
+2. `lintegral_mollifier`: `∫⁻ ofReal (ψ_σ) = 1` — the ∫⁻ scaling transport:
+   pointwise `ofReal`-split via a typed `have hpt` + `lintegral_congr_ae` (the ∫⁻ keeps the
+   opaque mollifier), then `lintegral_const_mul` + `lintegral_map` (with the composed
+   `hFmeas'` for the `(T a)`-form integrand — pass the UNcomposed map-form function, never
+   the composition) + `map_linearMap_addHaar_eq_smul_addHaar` + `lintegral_smul_measure` +
+   `ofReal_integral_eq_lintegral_ofReal` (note: its statement is
+   `ofReal (∫ f) = ∫⁻ ofReal (f a)`, so the goal `∫⁻ ofReal (f) = 1` needs the ← direction)
+   + `inv_pow`/`mul_inv_cancel₀`/`abs_of_pos` endgame. Beware: after `hφlint` rewrites the
+   ∫⁻ into the bare `1`, the `1` is at ℝ≥0∞, so `mul_one` must come before
+   `mul_comm`/`ofReal_mul`, and there is no `ofReal 1` in the goal at that point (the
+   `ofReal_one` must only appear at the very end).
+3. `isPdf_gaussSmoothed` nonnegativity: stated as a typed `have hgnonneg : ∀ x, 0 ≤ ∫ ...`
+   (an inline `fun x => integral_nonneg ...` under a `refine ⟨?_, ?_⟩` gets stuck
+   instance synthesis); `exact hgnonneg` closes the function-≤ goal directly.
+
 **Remaining (next round):**
 1. `weighted_modulus_tendsto` (the `(T)`-lemma): for continuous `f` with finite first
    moment, `G(u) = ∫ (1+‖x‖) |f (x−u) − f x| dx → 0` as `u → 0`. Proof: core/tail split —

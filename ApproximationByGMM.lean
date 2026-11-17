@@ -1202,3 +1202,92 @@ theorem lintegral_shift_neg (n : ℕ) (c : Fin n → ℝ) (g : EuclideanSpace �
       = fun y : EuclideanSpace ℝ (Fin n) => g (WithLp.toLp 2 ((y : Fin n → ℝ) + (-c))) from by
       funext y; rw [sub_eq_add_neg]]
   exact lintegral_toLp_trans_right n (-c) g hg
+
+/-- Lebesgue mass of the mollifier: `∫⁻ ψ_σ = 1`. -/
+theorem lintegral_mollifier (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (hσ : 0 < σ) :
+    ∫⁻ u : EuclideanSpace ℝ (Fin n), ENNReal.ofReal (mollifier n C hC σ hσ u) ∂volume = 1 := by
+  classical
+  -- the pointwise ofReal-split, typed (the ∫⁻ keeps the opaque mollifier)
+  have hpt : ∀ u : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal (mollifier n C hC σ hσ u)
+        = ENNReal.ofReal ((σ : ℝ)⁻¹ ^ n) *
+          ENNReal.ofReal (multivariateGaussianPDF n 0 C hC
+            (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ)))) := by
+    intro u
+    simp only [mollifier]
+    exact ENNReal.ofReal_mul (pow_nonneg (le_of_lt (inv_pos.mpr hσ)) n)
+  rw [lintegral_congr_ae (Filter.Eventually.of_forall hpt)]
+  -- the scaling transport: ∫⁻ (ofReal ∘ φ_C ∘ (·/σ)) ∂volume = (σ^n) • ∫⁻ (ofReal ∘ φ_C)
+  set T : EuclideanSpace ℝ (Fin n) →ₗ[ℝ] EuclideanSpace ℝ (Fin n) :=
+    Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) ((σ : ℝ)⁻¹ • (1 : Matrix (Fin n) (Fin n) ℝ))
+  have hTapp : ∀ u : EuclideanSpace ℝ (Fin n),
+      T u = WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ)) :=
+    fun u => toEuclideanLin_smul_one n ((σ : ℝ)⁻¹) u
+  have hFmeas' : Measurable (fun z : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (multivariateGaussianPDF n 0 C hC z)) :=
+    Measurable.ennreal_ofReal (measurable_multivariateGaussianPDF n 0 C hC)
+  have hLdet : (LinearMap.det T) = (σ : ℝ)⁻¹ ^ n := by
+    show (LinearMap.det (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n)
+      ((σ : ℝ)⁻¹ • (1 : Matrix (Fin n) (Fin n) ℝ)))) = (σ : ℝ)⁻¹ ^ n
+    rw [Matrix.toEuclideanLin_eq_toLin_orthonormal, LinearMap.det_toLin, Matrix.det_smul,
+      Matrix.det_one, Fintype.card_fin, mul_one]
+  have hLne : (LinearMap.det T) ≠ 0 := by
+    rw [hLdet]
+    exact pow_ne_zero n (ne_of_gt (inv_pos.mpr hσ))
+  have hLabs : ENNReal.ofReal |(LinearMap.det T)⁻¹| = ENNReal.ofReal (σ ^ n) := by
+    rw [hLdet, inv_pow, inv_inv, abs_of_pos (pow_pos hσ n)]
+  have hptr : (fun a : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal ((σ : ℝ)⁻¹ ^ n) *
+        ENNReal.ofReal (multivariateGaussianPDF n 0 C hC
+          (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (a : Fin n → ℝ)))))
+    = fun a : EuclideanSpace ℝ (Fin n) =>
+        ENNReal.ofReal ((σ : ℝ)⁻¹ ^ n) *
+          ENNReal.ofReal (multivariateGaussianPDF n 0 C hC (T a)) := by
+    funext a; rw [hTapp]
+  rw [lintegral_congr_ae (Filter.Eventually.of_forall (funext_iff.mp hptr))]
+  have hFmeas : Measurable (fun a : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (multivariateGaussianPDF n 0 C hC (T a))) :=
+    hFmeas'.comp (by fun_prop : Measurable T)
+  have htrans : ∫⁻ a : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal (multivariateGaussianPDF n 0 C hC (T a)) ∂volume
+    = ∫⁻ y : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal (multivariateGaussianPDF n 0 C hC y) ∂(Measure.map T volume) :=
+    (MeasureTheory.lintegral_map hFmeas' (by fun_prop : Measurable T)).symm
+  have hφint : MeasureTheory.Integrable (multivariateGaussianPDF n 0 C hC) volume :=
+    integrable_of_isPdf (isPdf_multivariateGaussianPDF n 0 C hC)
+  have hφnn : 0 ≤ᵐ[volume] multivariateGaussianPDF n 0 C hC :=
+    Filter.Eventually.of_forall fun x => le_of_lt (multivariateGaussianPDF_pos n 0 C hC x)
+  have hφlint : ∫⁻ y : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal (multivariateGaussianPDF n 0 C hC y) ∂volume = 1 := by
+    rw [← MeasureTheory.ofReal_integral_eq_lintegral_ofReal hφint hφnn,
+      integral_gaussianPDF n 0 C hC, ENNReal.ofReal_one]
+  rw [lintegral_const_mul (ENNReal.ofReal ((σ : ℝ)⁻¹ ^ n)) hFmeas, htrans,
+    MeasureTheory.Measure.map_linearMap_addHaar_eq_smul_addHaar volume hLne, hLabs,
+    lintegral_smul_measure, hφlint, smul_eq_mul]
+  -- goal: ofReal ((σ⁻¹)^n) * (ofReal (σ^n) * 1) = 1
+  rw [mul_one, mul_comm, ← ENNReal.ofReal_mul (pow_nonneg (le_of_lt hσ) n), inv_pow,
+    mul_inv_cancel₀ (pow_ne_zero n (ne_of_gt hσ)), ENNReal.ofReal_one]
+
+/-- The Gaussian-smoothed prior is a pdf (nonnegative with mass 1). -/
+theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hpdf : IsPdf f)
+    (hf : Continuous f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
+    IsPdf (gaussSmoothed n f C hC σ hσ) := by
+  classical
+  have hf0 : 0 ≤ f := hpdf.1
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  have hfm : Measurable f := hf.measurable
+  have hgnonneg : ∀ x : EuclideanSpace ℝ (Fin n),
+      0 ≤ ∫ u : EuclideanSpace ℝ (Fin n),
+        mollifier n C hC σ hσ u *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) ∂volume :=
+    fun x => MeasureTheory.integral_nonneg
+      (fun u => mul_nonneg (mollifier_nonneg n C hC σ hσ u) (hf0 _))
+  refine ⟨?_, ?_⟩
+  · exact hgnonneg
+  · -- the mass via Fubini over the pair (u, x):
+    --   ∫_x gaussSmoothed x dx = ∫_u ψ_σ(u) (∫_x f (x−u) dx) du = ∫_u ψ_σ(u) du = 1,
+    --   via `integral_prod` (joint integrability by Tonelli with the ∫⁻_x inner
+    --   transportable through `lintegral_shift_neg`, the outer ∫⁻_u being
+    --   `lintegral_mollifier`). Deferred to the next round.
+    sorry
