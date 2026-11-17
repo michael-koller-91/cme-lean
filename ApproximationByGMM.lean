@@ -1342,11 +1342,12 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
           ENNReal.ofReal_mul (mollifier_nonneg n C hC σ hσ x)]
       rw [lintegral_congr_ae (Filter.Eventually.of_forall fun x => by
         exact lintegral_congr_ae (Filter.Eventually.of_forall (hpt x)))]
-      -- the inner ∫⁻: ψ(p.1) · (∫⁻ ‖f (·−p.1)‖ₑ) = ofReal (ψ p.1)
+      -- the inner ∫⁻: ofReal (ψ a) · ofReal (f(·−a)) = ofReal (ψ a) · ‖f‖ₑ-form,
+      --   then the transportable shift
       have hinner : ∀ a : EuclideanSpace ℝ (Fin n),
           ∫⁻ b : EuclideanSpace ℝ (Fin n),
             ENNReal.ofReal (mollifier n C hC σ hσ a) *
-              ‖f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))‖ₑ ∂volume
+              ENNReal.ofReal (f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))) ∂volume
           = ENNReal.ofReal (mollifier n C hC σ hσ a) := by
         intro a
         have hmeas' : Measurable (fun b : EuclideanSpace ℝ (Fin n) =>
@@ -1357,7 +1358,18 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
                 WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)) := rfl
           rw [heq]
           exact hfm.enorm.comp (by fun_prop)
-        rw [MeasureTheory.lintegral_const_mul (ENNReal.ofReal (mollifier n C hC σ hσ a))
-          hmeas', hshift a, mul_one]
-      sorry
+        have hfpt : ∀ b : EuclideanSpace ℝ (Fin n),
+            ENNReal.ofReal (mollifier n C hC σ hσ a) *
+              ENNReal.ofReal (f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ))))
+            = ENNReal.ofReal (mollifier n C hC σ hσ a) *
+              ‖f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))‖ₑ := by
+          intro b
+          rw [(Real.enorm_eq_ofReal (hf0 _)).symm]
+        rw [lintegral_congr_ae (Filter.Eventually.of_forall hfpt),
+          MeasureTheory.lintegral_const_mul (ENNReal.ofReal (mollifier n C hC σ hσ a))
+            hmeas', hshift a, mul_one]
+      rw [lintegral_congr_ae (Filter.Eventually.of_forall hinner), lintegral_mollifier]
+      exact ENNReal.one_lt_top
+    -- the mass: ∫_x gaussSmoothed x dx = ∫_u ψ(u)·(∫_x f(x−u) dx) du = ∫_u ψ(u) du = 1
+    -- (Fubini via hΦint + integral_prod; the joint integrability is hΦint)
     sorry

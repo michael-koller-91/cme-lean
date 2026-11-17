@@ -335,6 +335,20 @@ mass-component):**
    inner integrand of that curried form.
 3. The remaining mass-chain `∫ gaussSmoothed = 1` via `integral_prod` is untouched.
 
+**Latest round: `hΦint` (joint integrability) is now FULLY PROVEN** — the correct
+Tonelli orientation (pair's FIRST coordinate carries ψ, so `lintegral_prod_le`'s outer ∫⁻
+pairs with ψ's variable and the inner ∫⁻ transports through `hshift`) plus the final
+steps: the hinner transport (with the `‖f‖ₑ`-form `hmeas'` supplied via the `heq := rfl`
+composition trick and the hfpt congr flipping the `ofReal (f …)` to the `‖f‖ₑ` form),
+then the outer ∫⁻ congr straight to `lintegral_mollifier` and `ENNReal.one_lt_top`.
+The only `sorry` left in Phase 1 is the mass chain `∫ gaussSmoothed = 1`
+(`integral_prod` with hΦint + the iterated-∫ inner transport `∫_x f(x−u) = 1` via
+`integral_shift_neg` + `integral_mollifier`), and then the smoothing theorem itself
+(`weighted_smoothing_tendsto_seq`: same Tonelli+DCT architecture as the `(T)`-lemma with
+the `hΦint`-style joint integrability for the ψ-weighted integrand and the outer DCT
+with dominator `φ_C(v)·2(1+M_f)`, closed via `weighted_modulus_tendsto_seq`), the
+hw-existence theorem (`σ_K = 1/(K+1)`), and the corollary via `cme_uniform_balls_R`.
+
 **Remaining (next round):**
 1. `weighted_modulus_tendsto` (the `(T)`-lemma): for continuous `f` with finite first
    moment, `G(u) = ∫ (1+‖x‖) |f (x−u) − f x| dx → 0` as `u → 0`. Proof: core/tail split —
