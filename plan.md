@@ -459,3 +459,52 @@ covered box. Both are routine but voluminous; neither involves new mathematical 
 * **Continuity of the GMM priors is not needed** by `cme_uniform_balls_R` (it is
   available anyway — Gaussian mixtures are continuous — but the theorem does not use
   it).
+
+
+**CRITICAL RECOVERY NOTE (latest round).** The working file `ApproximationByGMM.lean` was
+accidentally truncated by an editing script and had to be recovered from the git HEAD copy
+(read-only `git show`, user-approved). Recovered state (compiling, zero `sorry`, axioms
+clean):
+
+* everything up to and including the `(T)`-lemma `weighted_modulus_tendsto_seq` and the
+  Fubini mass chain of `isPdf_gaussSmoothed` — now FULLY PROVEN (the final steps:
+  the `hcongr` swapped-pair congr via `simp [Prod.swap]`, then `integral_prod` with
+  `hΦint`, the inner `integral_congr_ae` with `integral_const_mul + hshiftmass + mul_one`,
+  and `integral_mollifier`); `isPdf_gaussSmoothed` is done.
+
+**LOST in the truncation and still to be REWRITTEN (all tactics were verified once this
+session, so this is re-application, not design):**
+1. `mollifier_le_zero` (mollifier ≤ peak at 0, via `multivariateGaussianPDF_le_const`,
+   which was made `public` in Main.lean).
+2. `mollifier_integrable` (via `hasFiniteIntegral_iff_ofReal` + `lintegral_mollifier`).
+3. `lintegral_mollifier_mul_norm`: `∫⁻ ψ_σ·‖u‖ₑ = ofReal (σ * M_φ)` (same
+   `map_linearMap_addHaar` transport as `lintegral_mollifier`; `ENNReal.ofReal_mul` takes
+   only ONE nonneg hypothesis; endgame `ring` on ENNReal works).
+4. `weightedModulus` def + `weightedModulus_le` (bound `(1+M)(2+‖u‖)`; x-shift via
+   `integral_shift_neg` + triangle inequality; split via `abs_sub`; watch the
+   `(1 + ‖x‖)`-parenthesisation in `‖...‖` — the `‖`-bar must close AFTER the
+   `WithLp.toLp 2 (...)` arg) + `aemeasurable_weightedModulus` (via
+   `StronglyMeasurable.integral_prod_right'`).
+5. `weighted_smoothing_tendsto_seq` (the smoothing theorem, ~700 lines):
+   per-σ `hchain` = Step A (per-x identity via `∫ ψ = 1`, `integral_sub`,
+   `abs_integral_le_integral_abs`, the reflection `Measure.measurePreserving_neg` +
+   `integrable_toLp_shift` + ψ(0)-domination for per-x integrability) + Step B
+   (joint integrability `hΦint` via ∫⁻-Tonelli with the ψ-moment, the Fubini calc with
+   `integral_prod`/`integral_prod_swap`/swap-congrs, `integral_mollifier_mul` transport)
+   + Step C (DCT `tendsto_integral_of_dominated_convergence` with bound
+   `φ_C·(1+M)(2+‖v‖)` from `weightedModulus_le` + `σ_k ≤ 1`, shifted sequence
+   `σ(k+k₀)` + `Filter.tendsto_add_atTop_iff_nat`, final sandwich through `hchain`).
+   KEY GOTCHAS recorded this session: `calc` with `=`-steps does NOT auto-bridge to a
+   `≤` goal — the FIRST step's operator must be `≤`; `AEMeasurable`/`StronglyMeasurable`
+   are ∃-structures with no `.comp` (use `.comp_measurable`, `.comp_aemeasurable`);
+   `ENNReal.ofReal_mul` has ONE explicit hypothesis; `Real.enorm_eq_ofReal_abs` converts
+   `‖r‖ₑ = ofReal |r|`; `mul_le_mul_of_nonneg_left/right` (not `*_left` only); the
+   ∫⁻ Fubini equality is `lintegral_prod` (forward direction turns pair-form into
+   iterated); `Filter.Eventually.of_forall`, `norm_pos_iff.2`, `tendsto_const_nhds
+   (x := ...)`.
+6. Then the hw-existence theorem (`σ_K = 1/(K+1)`, per-K `IsPdf (gaussSmoothed …)`,
+   hw via `ofReal_integral_eq_lintegral_ofReal` conversion) and the composed corollary
+   through `cme_uniform_balls_R`.
+7. `Main.lean`: `multivariateGaussianPDF_le_const` was made `public` (needed by the
+   mollifier-peak lemma).
+

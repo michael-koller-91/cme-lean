@@ -1224,7 +1224,8 @@ theorem integral_noise_pullback (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS :
 
 /-- The multivariate Gaussian pdf is bounded above by its normalizing constant: the quadratic
 form `uᵀ Σ⁻¹ u` in the exponent is nonnegative, so the exponential factor is at most `1`. -/
-theorem multivariateGaussianPDF_le_const (n : ℕ) (m : Fin n → ℝ) (Cov : Matrix (Fin n) (Fin n) ℝ)
+public theorem multivariateGaussianPDF_le_const (n : ℕ) (m : Fin n → ℝ)
+    (Cov : Matrix (Fin n) (Fin n) ℝ)
     (hC : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) :
     multivariateGaussianPDF n m Cov hC x ≤
       ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt Cov.det)⁻¹ := by

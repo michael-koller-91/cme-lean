@@ -1393,10 +1393,22 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
       ← MeasureTheory.integral_prod_swap (f := fun p : EuclideanSpace ℝ (Fin n) ×
         EuclideanSpace ℝ (Fin n) => mollifier n C hC σ hσ p.2 *
           f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ))))]
-    -- remaining: the inner-∫ transport (∫_y f(y−x) dy = 1 via hshiftmass, then
-    -- integral_const_mul + mul_one) and integral_mollifier; the goal's ∫-term is the
-    -- single-∫-over-product form ∫ z, gA z.swap ∂(vol.prod vol) whose ψ-coordinate is
-    -- the pair's SECOND after the swap (i.e. z.1 = the OUTER in the Tonelli reading) —
-    -- the transport needs the ψ-const-in-inner orientation via a stated hinner in the
-    -- exact z.swap-shapes; deferred to next round
-    sorry
+    -- the swapped-pair congr: the projs reduce (z.swap.2 = z.1, z.swap.1 = z.2),
+    -- turning the integrand into the Φ form with ψ on the FIRST coordinate
+    have hcongr : ∀ z : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+        mollifier n C hC σ hσ z.swap.2 *
+          f (WithLp.toLp 2 ((z.swap.1 : Fin n → ℝ) - (z.swap.2 : Fin n → ℝ)))
+        = mollifier n C hC σ hσ z.1 *
+          f (WithLp.toLp 2 ((z.2 : Fin n → ℝ) - (z.1 : Fin n → ℝ))) := by
+      intro z
+      simp [Prod.swap]
+    rw [MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall hcongr),
+      MeasureTheory.integral_prod
+        (f := fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+          mollifier n C hC σ hσ p.1 *
+            f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ))))
+        (μ := volume) (ν := volume) hΦint,
+      MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun x => by
+        rw [MeasureTheory.integral_const_mul (mollifier n C hC σ hσ x), hshiftmass x,
+          mul_one]),
+      integral_mollifier]
