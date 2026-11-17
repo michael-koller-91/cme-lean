@@ -554,3 +554,651 @@ theorem integrable_toLp_sub {F : Type*} [MeasurableSpace F] [NormedAddCommGroup 
   rw [MeasureTheory.hasFiniteIntegral_iff_enorm, ← lintegral_map hgmeas.enorm hTmeas,
     hTmap]
   exact hg.2
+
+/-- **Moment-tail lemma**: for a nonnegative integrable function `g`, the integrals over the
+outside of growing closed balls tend to `0` (sequential dominated convergence on the
+exhaustion by complements of balls). -/
+theorem setIntegral_tail_tendsto (n : ℕ) (g : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hg : MeasureTheory.Integrable g volume) (hgnonneg : ∀ x, 0 ≤ g x) :
+    Tendsto (fun k : ℕ => ∫ x in {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}, g x ∂volume)
+      Filter.atTop (nhds 0) := by
+  classical
+  have hmeas : ∀ k : ℕ, MeasurableSet {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖} := by
+    intro k
+    exact (((by fun_prop : Continuous fun y : EuclideanSpace ℝ (Fin n) => ‖y‖)).isOpen_preimage _
+      isOpen_Ioi).measurableSet
+  have hind : ∀ k : ℕ, ∫ x in {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}, g x ∂volume
+      = ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}.indicator g x ∂volume :=
+    fun k => (MeasureTheory.integral_indicator (s := {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖})
+      (hmeas k)).symm
+  refine Filter.Tendsto.congr' (Filter.Eventually.of_forall fun k => (hind k).symm) ?_
+  have hbound : ∀ k : ℕ, ∀ᵐ x ∂volume,
+      ‖{y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}.indicator g x‖ ≤ g x := by
+    intro k
+    filter_upwards with x
+    rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}) with hx | hx
+    · simp only [Set.indicator_of_mem hx]
+      simp [abs_of_nonneg (hgnonneg x)]
+    · simp only [Set.indicator_of_notMem hx]
+      simp
+      exact hgnonneg x
+  have hlim : ∀ᵐ x ∂volume,
+      Tendsto (fun k : ℕ => {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}.indicator g x)
+        Filter.atTop (𝓝 ((fun _ => (0 : ℝ)) x)) := by
+    filter_upwards with x
+    have hev : (fun k : ℕ => {y : EuclideanSpace ℝ (Fin n) | (k : ℝ) < ‖y‖}.indicator g x)
+        =ᶠ[Filter.atTop] fun _ => (0 : ℝ) := by
+      obtain ⟨k₀, h⟩ := exists_nat_gt ‖x‖
+      filter_upwards [Filter.eventually_ge_atTop k₀] with k hk
+      have hmem : ¬((k : ℝ) < ‖x‖) :=
+        not_lt.mpr (le_trans (le_of_lt h) (Nat.cast_le.mpr hk))
+      simp [hmem]
+    exact Filter.Tendsto.congr' hev.symm tendsto_const_nhds
+  have hdct := MeasureTheory.tendsto_integral_of_dominated_convergence g
+    (f := fun _ => (0 : ℝ)) (fun k => hg.1.indicator (hmeas k)) hg hbound hlim
+  rw [integral_zero] at hdct
+  exact hdct
+
+/-- Helper: the outside of a closed ball as a set-of-norm predicate is measurable. -/
+theorem measurableSet_norm_gt (n : ℕ) (r : ℝ) :
+    MeasurableSet {y : EuclideanSpace ℝ (Fin n) | r < ‖y‖} := by
+  have h : {y : EuclideanSpace ℝ (Fin n) | r < ‖y‖} =
+      (Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) r)ᶜ := by
+    ext x
+    simp only [Metric.mem_closedBall, dist_zero_right, not_le, Set.mem_setOf_eq,
+      Set.mem_compl_iff]
+  rw [h]
+  exact Metric.isClosed_closedBall.measurableSet.compl
+
+set_option maxHeartbeats 2000000 in
+set_option diagnostics true in
+/-- **Translation modulus lemma** (the `(T)`-lemma): for a continuous pdf `f` with finite first
+moment, the weighted translation modulus
+`G(u) = ∫ (1 + ‖x‖) * |f (x − u) − f x| ∂volume`
+tends to `0` along every sequence `u k → 0`. Continuity of `f` makes the core contribution a
+plain dominated convergence, and the tails are controlled by the first moment (using the
+translation invariance of `volume`). -/
+theorem weighted_modulus_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (u : ℕ → EuclideanSpace ℝ (Fin n)) (hu : Filter.Tendsto u Filter.atTop (nhds 0)) :
+    Filter.Tendsto (fun k : ℕ => ∫ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u k : Fin n → ℝ))) - f x| ∂volume)
+      Filter.atTop (nhds 0) := by
+  classical
+  have hf0 : 0 ≤ f := hpdf.1
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  have hwfint : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+      volume := by
+    have heq : (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+        = fun x : EuclideanSpace ℝ (Fin n) => f x + ‖x‖ * f x := by
+      funext x; ring
+    rw [heq]; exact hfi.add hfmom
+  have hwnonneg : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ (1 + ‖x‖) * f x := fun x =>
+    mul_nonneg (add_nonneg zero_le_one (norm_nonneg x)) (hf0 x)
+  -- the moment-tail lemma applied to `w * f`
+  have htail := setIntegral_tail_tendsto n (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+    hwfint hwnonneg
+  -- fix `k₀` with `‖u (k + k₀)‖ < 1` for all `k`
+  obtain ⟨k₀, hk₀⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hu 1 one_pos)
+  have hu1 : ∀ k : ℕ, ‖u (k + k₀)‖ < 1 := by
+    intro k
+    have h := hk₀ (k + k₀) (Nat.le_add_left k₀ k)
+    rw [dist_zero_right] at h
+    exact h
+  -- the shifted sequence `u (· + k₀)` still tends to `0`
+  have hu' : Filter.Tendsto (fun k : ℕ => u (k + k₀)) Filter.atTop (nhds 0) := by
+    refine Metric.tendsto_nhds.mpr fun δ hδ => ?_
+    obtain ⟨N, hN⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hu δ hδ)
+    exact Filter.eventually_atTop.mpr ⟨N, fun k hk =>
+      hN (k + k₀) (Nat.le_trans hk (Nat.le_add_right k k₀))⟩
+  -- main claim for the shifted sequence
+  have hmain : Filter.Tendsto (fun k : ℕ => ∫ x : EuclideanSpace ℝ (Fin n),
+      (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+        ∂volume) Filter.atTop (nhds 0) := by
+    classical
+    have hfm : Measurable f := hf.measurable
+    -- the norm triangle for the shifted vector
+    have htri : ∀ (k : ℕ) (x : EuclideanSpace ℝ (Fin n)),
+        ‖x‖ ≤ ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖ + ‖u (k + k₀)‖ := by
+      intro k x
+      have heq : x = WithLp.toLp 2 (((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)) +
+          (u (k + k₀) : Fin n → ℝ)) := by
+        apply WithLp.ofLp_injective
+        show (x : Fin n → ℝ) =
+          ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)) + (u (k + k₀) : Fin n → ℝ)
+        rw [sub_add_cancel]
+      rw [show ‖x‖ = ‖WithLp.toLp 2 (((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)) +
+          (u (k + k₀) : Fin n → ℝ))‖ from congrArg (fun w : EuclideanSpace ℝ (Fin n) => ‖w‖) heq,
+        WithLp.toLp_add]
+      exact norm_add_le (a := WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))
+        (b := WithLp.toLp 2 ((u (k + k₀) : Fin n → ℝ)))
+    -- the weighted bound `w(x) ≤ (1 + ‖u‖) * (1 + ‖x − u‖)`
+    have hbnd : ∀ (k : ℕ) (x : EuclideanSpace ℝ (Fin n)),
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|
+          ≤ (1 + ‖u (k + k₀)‖) *
+            (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖) *
+              f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) := by
+      intro k x
+      rw [abs_of_nonneg (hf0 _)]
+      have hnorm : (1 + ‖x‖) ≤ (1 + ‖u (k + k₀)‖) *
+          (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖) := by
+        have hprod : 0 ≤ ‖u (k + k₀)‖ *
+            ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖ :=
+          mul_nonneg (norm_nonneg (u (k + k₀)))
+            (norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))))
+        nlinarith [htri k x, hprod]
+      exact mul_le_mul_of_nonneg_right hnorm (hf0 _)
+    -- integrability of the shifted weighted `f` (transported from `hwfint`)
+    have hshiftint : ∀ k : ℕ, MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 + ‖u (k + k₀)‖) * ((1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖) *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))))) volume := by
+      intro k
+      have h1 := integrable_toLp_shift n (-(u (k + k₀) : Fin n → ℝ))
+        (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖u (k + k₀)‖) * ((1 + ‖z‖) * f z))
+        (hwfint.const_mul (1 + ‖u (k + k₀)‖)) (by fun_prop)
+      refine h1.congr' ?_ ?_
+      · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          (1 + ‖u (k + k₀)‖) * ((1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖) *
+            f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))))).aestronglyMeasurable
+      · filter_upwards with x
+        show ‖(fun z : EuclideanSpace ℝ (Fin n) =>
+                (1 + ‖u (k + k₀)‖) * ((1 + ‖z‖) * f z))
+              (WithLp.toLp 2 ((x : Fin n → ℝ) + (-(u (k + k₀) : Fin n → ℝ))))‖
+          = ‖(1 + ‖u (k + k₀)‖) * ((1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖) *
+              f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))))‖
+        rw [sub_eq_add_neg]
+    -- integrability of the full modulus integrand
+    have hintg : ∀ k : ℕ, MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)
+        volume := by
+      intro k
+      refine MeasureTheory.Integrable.mono ((hshiftint k).add hwfint) ?_ ?_
+      · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)
+            ).aestronglyMeasurable
+      · filter_upwards with x
+        have habs : |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+            ≤ |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| + |f x| :=
+          abs_sub _ _
+        simp only [Real.norm_eq_abs, Pi.add_apply]
+        rw [abs_of_nonneg (by positivity : 0 ≤ (1 + ‖x‖) *
+          |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|),
+          abs_of_nonneg (add_nonneg
+            (mul_nonneg (by linarith [norm_nonneg (u (k + k₀))])
+              (mul_nonneg (by linarith [norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) -
+                (u (k + k₀) : Fin n → ℝ)))]) (hf0 _))) (hwnonneg x))]
+        have hstep1 : (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+            ≤ (1 + ‖x‖) * (|f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|
+              + |f x|) := mul_le_mul_of_nonneg_left habs (by linarith [norm_nonneg x])
+        have hstep2 : (1 + ‖x‖) *
+            (|f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| + |f x|)
+            ≤ (1 + ‖u (k + k₀)‖) * ((1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) -
+              (u (k + k₀) : Fin n → ℝ))‖) * f (WithLp.toLp 2 ((x : Fin n → ℝ) -
+              (u (k + k₀) : Fin n → ℝ)))) + (1 + ‖x‖) * f x := by
+          rw [abs_of_nonneg (hf0 _), abs_of_nonneg (hf0 x), mul_add, ← mul_assoc]
+          have h2a := hbnd k x
+          rw [abs_of_nonneg (hf0 _)] at h2a
+          linarith [h2a]
+        linarith [hstep1, hstep2]
+    -- ε-proof
+    refine Metric.tendsto_nhds.mpr ?_
+    intro ε hε
+    obtain ⟨δ, hδpos, hδε⟩ : ∃ δ, 0 < δ ∧ ε = 4 * δ := ⟨ε / 4, by linarith, by field_simp⟩
+    obtain ⟨K₁, hK₁⟩ := (Metric.tendsto_nhds.mp htail δ hδpos).exists
+    have hK₁' : ∫ x in {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖},
+        (1 + ‖x‖) * f x ∂volume < δ := by
+      have h0 : 0 ≤ ∫ x in {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖},
+          (1 + ‖x‖) * f x ∂volume :=
+        MeasureTheory.setIntegral_nonneg (measurableSet_norm_gt n (K₁ : ℝ))
+          (fun x _ => hwnonneg x)
+      have h := hK₁
+      rwa [Real.dist_eq, sub_zero, abs_of_nonneg h0] at h
+    -- a bound for `|f|` on the ball of radius `(K₁ : ℝ) + 2`
+    obtain ⟨B₀, hB₀⟩ := (isCompact_closedBall (0 : EuclideanSpace ℝ (Fin n)) ((K₁ : ℝ) + 2)
+      ).exists_bound_of_continuousOn (hf.abs.continuousOn)
+    obtain ⟨B, hB0, hBmax⟩ : ∃ B, 0 ≤ B ∧ ∀ z : EuclideanSpace ℝ (Fin n),
+        ‖z‖ ≤ (K₁ : ℝ) + 2 → |f z| ≤ B := by
+      refine ⟨max B₀ 0, le_max_right _ _, fun z hz => ?_⟩
+      have hz' : z ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) ((K₁ : ℝ) + 2) :=
+        Metric.mem_closedBall.mpr (by rw [dist_zero_right]; linarith)
+      have hzn := hB₀ z hz'
+      simp only [Real.norm_eq_abs, abs_abs] at hzn
+      linarith [hzn, le_max_left B₀ 0]
+    have hcoreBall : {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} =
+        Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) ((K₁ : ℝ) + 1) := by
+      ext y
+      simp only [Metric.mem_closedBall, dist_zero_right, Set.mem_setOf_eq]
+    have hmeasCore : MeasurableSet {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} := by
+      rw [hcoreBall]
+      exact Metric.isClosed_closedBall.measurableSet
+    -- the core DCT
+    have hdom : ∀ (k : ℕ) (x : EuclideanSpace ℝ (Fin n)),
+        |{y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x|
+          ≤ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun _ => (1 + ((K₁ : ℝ) + 1)) * (2 * B)) x := by
+      intro k x
+      rcases le_or_gt ‖x‖ ((K₁ : ℝ) + 1) with hcore | hcore
+      · have hmem : x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} := hcore
+        simp only [Set.indicator_of_mem hmem]
+        have hz' : ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖ ≤ (K₁ : ℝ) + 2 := by
+          show ‖(x - u (k + k₀) : EuclideanSpace ℝ (Fin n))‖ ≤ (K₁ : ℝ) + 2
+          have hns : ‖(x - u (k + k₀) : EuclideanSpace ℝ (Fin n))‖ ≤ ‖x‖ + ‖u (k + k₀)‖ :=
+            norm_sub_le _ _
+          nlinarith [hns, hu1 k, hcore, norm_nonneg (u (k + k₀))]
+        have habs : |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+            ≤ |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| + |f x| :=
+          abs_sub _ _
+        rw [abs_of_nonneg (by positivity : 0 ≤ (1 + ‖x‖) *
+          |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)]
+        have h5 : |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| ≤ B :=
+          hBmax _ hz'
+        have h6 : |f x| ≤ B := hBmax x (by linarith [hcore])
+        have h7a : (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|
+            ≤ (1 + ((K₁ : ℝ) + 1)) * B := by
+          refine le_trans (mul_le_mul_of_nonneg_left h5 (by linarith [norm_nonneg x])) ?_
+          exact mul_le_mul_of_nonneg_right (by linarith [hcore]) (by linarith [hB0])
+        have h7b : (1 + ‖x‖) * |f x| ≤ (1 + ((K₁ : ℝ) + 1)) * B := by
+          refine le_trans (mul_le_mul_of_nonneg_left h6 (by linarith [norm_nonneg x])) ?_
+          exact mul_le_mul_of_nonneg_right (by linarith [hcore]) (by linarith [hB0])
+        refine le_trans (mul_le_mul_of_nonneg_left habs (by linarith [norm_nonneg x])) ?_
+        rw [mul_add]
+        have h7c : (1 + ((K₁ : ℝ) + 1)) * (2 * B)
+            = (1 + ((K₁ : ℝ) + 1)) * B + (1 + ((K₁ : ℝ) + 1)) * B := by ring
+        linarith [h7a, h7b, h7c]
+      · have hmem : x ∉ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} :=
+          not_le.mpr hcore
+        rw [Set.indicator_of_notMem hmem, Set.indicator_of_notMem hmem]
+        simp
+    have hlim : ∀ᵐ x ∂volume, Filter.Tendsto (fun k : ℕ =>
+        {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x)
+        Filter.atTop (𝓝 ((fun _ => (0 : ℝ)) x)) := by
+      filter_upwards with x
+      rcases le_or_gt ‖x‖ ((K₁ : ℝ) + 1) with hcore | hcore
+      · have hmem : x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} := hcore
+        simp only [Set.indicator_of_mem hmem]
+        have hG : Continuous (fun v : EuclideanSpace ℝ (Fin n) =>
+            (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (v : Fin n → ℝ))) - f x|) := by
+          fun_prop
+        have h1 := Filter.Tendsto.comp (hG.tendsto (0 : EuclideanSpace ℝ (Fin n))) hu'
+        have hcong : ∀ k : ℕ, ((fun v : EuclideanSpace ℝ (Fin n) =>
+            (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (v : Fin n → ℝ))) - f x|) ∘
+              (fun k : ℕ => u (k + k₀))) k
+            = (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| :=
+          fun k => rfl
+        simpa using Filter.Tendsto.congr hcong h1
+      · have hmem : x ∉ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} :=
+          not_le.mpr hcore
+        simp only [Set.indicator_of_notMem hmem]
+        exact tendsto_const_nhds
+    have hboundint : MeasureTheory.Integrable
+        ({y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+          (fun _ => (1 + ((K₁ : ℝ) + 1)) * (2 * B))) volume := by
+      refine ⟨(measurable_const.indicator hmeasCore).aestronglyMeasurable, ?_⟩
+      rw [MeasureTheory.hasFiniteIntegral_iff_enorm]
+      have h2 : (fun x : EuclideanSpace ℝ (Fin n) => ‖{y : EuclideanSpace ℝ (Fin n) |
+          ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator (fun _ => (1 + ((K₁ : ℝ) + 1)) * (2 * B)) x‖ₑ)
+          = {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun _ => ENNReal.ofReal ((1 + ((K₁ : ℝ) + 1)) * (2 * B))) := by
+        funext x
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}) with hx | hx
+        · rw [Set.indicator_of_mem hx, Set.indicator_of_mem hx, Real.enorm_eq_ofReal_abs,
+            abs_of_nonneg (by positivity)]
+        · rw [Set.indicator_of_notMem hx, Set.indicator_of_notMem hx]
+          simp
+      rw [h2, MeasureTheory.lintegral_indicator_const hmeasCore]
+      have hmeas : volume {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} < ⊤ := by
+        rw [hcoreBall]
+        exact measure_closedBall_lt_top
+      exact ENNReal.mul_lt_top ENNReal.ofReal_lt_top hmeas
+    have hdct := MeasureTheory.tendsto_integral_of_dominated_convergence
+      ({y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+        (fun _ => (1 + ((K₁ : ℝ) + 1)) * (2 * B)))
+      (f := fun _ => (0 : ℝ))
+      (fun k => (((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)).indicator
+          hmeasCore).aestronglyMeasurable)
+      hboundint
+      (fun k => Filter.Eventually.of_forall fun x => hdom k x) hlim
+    rw [integral_zero] at hdct
+    have hdct' : Filter.Tendsto (fun k : ℕ => ∫ x in {y : EuclideanSpace ℝ (Fin n) |
+        ‖y‖ ≤ (K₁ : ℝ) + 1}, (1 + ‖x‖) *
+          |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| ∂volume)
+        Filter.atTop (𝓝 0) := by
+      refine Filter.Tendsto.congr' (Filter.Eventually.of_forall fun k => ?_) hdct
+      exact MeasureTheory.integral_indicator
+        (s := {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}) hmeasCore
+    -- the tail bound `T1 < 2δ` via the transport of the shifted indicator
+    -- the tail bound `T1 < 2δ` via the transport of the shifted indicator
+    have hψ₂meas : Measurable ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+        (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)) :=
+      ((by fun_prop : Measurable fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)).indicator
+        (measurableSet_norm_gt n (K₁ : ℝ))
+    have hψ₂int : MeasureTheory.Integrable
+        ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+          (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)) volume := by
+      refine MeasureTheory.Integrable.mono hwfint ?_ ?_
+      · exact hψ₂meas.aestronglyMeasurable
+      · filter_upwards with x
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}) with hmem | hmem
+        · simp only [Set.indicator_of_mem hmem, Real.norm_eq_abs, abs_of_nonneg (hwnonneg x)]
+          exact le_refl _
+        · simp only [Set.indicator_of_notMem hmem, Real.norm_eq_abs, abs_zero]
+          exact abs_nonneg _
+    have hT1intall : ∀ k : ℕ, MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x) volume := by
+      intro k
+      refine MeasureTheory.Integrable.mono (hshiftint k) ?_ ?_
+      · exact (((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|)).indicator
+            (measurableSet_norm_gt n ((K₁ : ℝ) + 1))).aestronglyMeasurable
+      · filter_upwards with x
+        have hχpos : 0 ≤ (1 + ‖u (k + k₀)‖) * ((1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) -
+            (u (k + k₀) : Fin n → ℝ))‖) * f (WithLp.toLp 2 ((x : Fin n → ℝ) -
+            (u (k + k₀) : Fin n → ℝ)))) :=
+          mul_nonneg (by linarith [norm_nonneg (u (k + k₀))])
+            (mul_nonneg (by linarith [norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) -
+              (u (k + k₀) : Fin n → ℝ)))]) (hf0 _))
+        simp only [Real.norm_eq_abs]
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}) with hmem | hmem
+        · rw [Set.indicator_of_mem hmem,
+            abs_of_nonneg (by positivity : 0 ≤ (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|),
+            abs_of_nonneg hχpos, ← mul_assoc]
+          exact hbnd k x
+        · rw [Set.indicator_of_notMem hmem, abs_zero, abs_of_nonneg hχpos]
+          exact hχpos
+    have hT1 : ∀ k : ℕ, ∫ x : EuclideanSpace ℝ (Fin n),
+        {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x ∂volume
+      < 2 * δ := by
+      intro k
+      have hψ₂shift : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+            (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+              (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))) volume := by
+        have h2 := integrable_toLp_shift n (-(u (k + k₀) : Fin n → ℝ))
+          ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+            (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)) hψ₂int hψ₂meas
+        refine h2.congr' ?_ ?_
+        · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+            {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+              (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))))).aestronglyMeasurable
+        · filter_upwards with x
+          show ‖{y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+                (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                  (WithLp.toLp 2 ((x : Fin n → ℝ) + (-(u (k + k₀) : Fin n → ℝ))))‖
+            = ‖{y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+              (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))‖
+          rw [sub_eq_add_neg]
+      have hT1int := hT1intall k
+      have hpt : ∀ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x
+          ≤ (1 + ‖u (k + k₀)‖) * ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+              (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))) := by
+        intro x
+        rcases le_or_gt ‖x‖ ((K₁ : ℝ) + 1) with hout | hin
+        · have hmem : x ∉ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} :=
+            not_lt.mpr hout
+          rw [Set.indicator_of_notMem hmem]
+          have hpos : 0 ≤ (1 + ‖u (k + k₀)‖) *
+              ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+                (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                  (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))) := by
+            rcases em ((WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) ∈
+              {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}) with hm | hm
+            · rw [Set.indicator_of_mem hm]
+              exact mul_nonneg (by linarith [norm_nonneg (u (k + k₀))])
+                (mul_nonneg (by linarith [norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) -
+                  (u (k + k₀) : Fin n → ℝ)))]) (hf0 _))
+            · rw [Set.indicator_of_notMem hm]
+              exact mul_nonneg (by linarith [norm_nonneg (u (k + k₀))]) (le_refl 0)
+          exact hpos
+        · have hmem : x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} := hin
+          have hzmem : (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) ∈
+              {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖} := by
+            show (K₁ : ℝ) < ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))‖
+            linarith [htri k x, hu1 k, hin]
+          rw [Set.indicator_of_mem hmem, Set.indicator_of_mem hzmem, ← mul_assoc]
+          exact hbnd k x
+      have hchain : ∫ x : EuclideanSpace ℝ (Fin n),
+            {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+              (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+                |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x ∂volume
+          ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+              (1 + ‖u (k + k₀)‖) * ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+                (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                  (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))) ∂volume :=
+        MeasureTheory.integral_mono hT1int (hψ₂shift.const_mul (1 + ‖u (k + k₀)‖)) hpt
+      rw [MeasureTheory.integral_const_mul (1 + ‖u (k + k₀)‖)] at hchain
+      have htransport : ∫ x : EuclideanSpace ℝ (Fin n),
+            {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+              (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)
+                (WithLp.toLp 2 ((x : Fin n → ℝ) + (-(u (k + k₀) : Fin n → ℝ)))) ∂volume
+          = ∫ x in {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}, (1 + ‖x‖) * f x ∂volume := by
+        rw [integral_toLp_trans_right n (-(u (k + k₀) : Fin n → ℝ))
+          ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+            (fun z : EuclideanSpace ℝ (Fin n) => (1 + ‖z‖) * f z)) hψ₂meas.aestronglyMeasurable,
+          integral_indicator (measurableSet_norm_gt n (K₁ : ℝ))]
+      simp only [sub_eq_add_neg] at hchain
+      rw [htransport] at hchain
+      refine lt_of_le_of_lt hchain ?_
+      have hint : 0 ≤ ∫ x in {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖},
+          (1 + ‖x‖) * f x ∂volume :=
+        MeasureTheory.setIntegral_nonneg (measurableSet_norm_gt n (K₁ : ℝ))
+          (fun x _ => hwnonneg x)
+      exact lt_of_le_of_lt
+        (mul_le_mul_of_nonneg_right
+          (show (1 + ‖u (k + k₀)‖ : ℝ) ≤ 2 by linarith [norm_nonneg (u (k + k₀)), hu1 k]) hint)
+        (mul_lt_mul_of_pos_left hK₁' (show (0 : ℝ) < 2 by norm_num))
+    -- the `f`-tail bound `T2 < δ`
+    have hT2 : ∫ x : EuclideanSpace ℝ (Fin n),
+        {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x ∂volume < δ := by
+      have hT2int : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x) volume := by
+        refine MeasureTheory.Integrable.mono hwfint ?_ ?_
+        · exact (((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+            (1 + ‖x‖) * f x)).indicator (measurableSet_norm_gt n ((K₁ : ℝ) + 1))).aestronglyMeasurable
+        · filter_upwards with x
+          simp only [Real.norm_eq_abs]
+          rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}) with hmem | hmem
+          · rw [Set.indicator_of_mem hmem, abs_of_nonneg (hwnonneg x)]
+          · rw [Set.indicator_of_notMem hmem, abs_zero]
+            exact abs_nonneg _
+      have hpt : ∀ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x
+          ≤ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x := by
+        intro x
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}) with hmem | hmem
+        · have hmem' : x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖} := by
+            show (K₁ : ℝ) < ‖x‖
+            linarith [show ((K₁ : ℝ) + 1 : ℝ) < ‖x‖ from hmem]
+          rw [Set.indicator_of_mem hmem, Set.indicator_of_mem hmem']
+        · rw [Set.indicator_of_notMem hmem]
+          rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}) with hmem2 | hmem2
+          · rw [Set.indicator_of_mem hmem2]
+            exact mul_nonneg (by linarith [norm_nonneg x]) (hf0 x)
+          · rw [Set.indicator_of_notMem hmem2]
+      have hint2 : ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x ∂volume
+        = ∫ x in {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) < ‖y‖}, (1 + ‖x‖) * f x ∂volume :=
+        MeasureTheory.integral_indicator (measurableSet_norm_gt n (K₁ : ℝ))
+      exact lt_of_le_of_lt (MeasureTheory.integral_mono hT2int hψ₂int hpt)
+        (lt_of_le_of_lt (le_of_eq hint2) hK₁')
+    -- assemble
+    obtain ⟨N₁, hN₁⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hdct' δ hδpos)
+    refine Filter.eventually_atTop.mpr ⟨N₁, fun k hk => ?_⟩
+    have hA : ∫ x in {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1},
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| ∂volume
+        < δ := by
+      have h0 : 0 ≤ ∫ x in {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1},
+          (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| ∂volume :=
+        MeasureTheory.setIntegral_nonneg hmeasCore (fun x _ => by positivity)
+      have h := hN₁ k hk
+      rwa [Real.dist_eq, sub_zero, abs_of_nonneg h0] at h
+    have hAint : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x) volume := by
+      refine MeasureTheory.Integrable.mono (hintg k) ?_ ?_
+      · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x)).aestronglyMeasurable
+      · filter_upwards with x
+        have hχpos : 0 ≤ (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| := by positivity
+        simp only [Real.norm_eq_abs]
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}) with hmem | hmem
+        · rw [Set.indicator_of_mem hmem, abs_of_nonneg hχpos]
+        · rw [Set.indicator_of_notMem hmem, abs_zero]
+          exact abs_nonneg _
+    have hT2int : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+          (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x) volume := by
+      refine MeasureTheory.Integrable.mono hwfint ?_ ?_
+      · exact (((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          (1 + ‖x‖) * f x)).indicator (measurableSet_norm_gt n ((K₁ : ℝ) + 1))).aestronglyMeasurable
+      · filter_upwards with x
+        simp only [Real.norm_eq_abs]
+        rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}) with hmem | hmem
+        · rw [Set.indicator_of_mem hmem, abs_of_nonneg (hwnonneg x)]
+        · rw [Set.indicator_of_notMem hmem, abs_zero]
+          exact abs_nonneg _
+    have hpoint : ∀ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+          ≤ ({y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+              (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+                |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)) x
+            + ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+              (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+                |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|)) x
+            + ({y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+              (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)) x := by
+      intro x
+      rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}) with hmem | hmem
+      · have hmem' : ‖x‖ ≤ (K₁ : ℝ) + 1 := by
+          simpa only [Set.mem_setOf_eq] using hmem
+        have hmem2 : x ∉ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} :=
+          not_lt.mpr hmem'
+        have hT1rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x = 0 := by
+          rw [Set.indicator_of_notMem hmem2]
+        have hT2rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x = 0 := by
+          rw [Set.indicator_of_notMem hmem2]
+        simp only [Set.indicator_of_mem hmem, hT1rw, hT2rw]
+        linarith [abs_nonneg ((1 + ‖x‖) *
+          |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)]
+      · have hmem' : ¬(‖x‖ ≤ (K₁ : ℝ) + 1) := by
+          simpa only [Set.mem_setOf_eq] using hmem
+        have hmem2 : x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} :=
+          not_le.mp hmem'
+        have hT1rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x
+            = (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| := by
+          rw [Set.indicator_of_mem hmem2]
+        have hT2rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x = (1 + ‖x‖) * f x := by
+          rw [Set.indicator_of_mem hmem2]
+        rw [Set.indicator_of_notMem hmem, hT1rw, hT2rw]
+        have habs : |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+            ≤ |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))| + |f x| :=
+          abs_sub _ _
+        have hstep1 : (1 + ‖x‖) *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|
+            ≤ (1 + ‖x‖) * (|f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|
+              + |f x|) := mul_le_mul_of_nonneg_left habs (by linarith [norm_nonneg x])
+        rw [mul_add, abs_of_nonneg (hf0 x)] at hstep1
+        linarith [hstep1]
+    have hgnonneg : 0 ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| ∂volume :=
+      MeasureTheory.integral_nonneg (fun x => by positivity)
+    rw [Real.dist_eq, sub_zero, abs_of_nonneg hgnonneg]
+    have h1 := MeasureTheory.integral_mono (hintg k)
+      ((hAint.add (hT1intall k)).add hT2int) hpoint
+    refine lt_of_le_of_lt h1 ?_
+    rw [MeasureTheory.integral_add' (hAint.add (hT1intall k)) hT2int,
+      MeasureTheory.integral_add' hAint (hT1intall k)]
+    have hT2pos : ∀ x : EuclideanSpace ℝ (Fin n),
+        0 ≤ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+          (fun x' : EuclideanSpace ℝ (Fin n) => (1 + ‖x'‖) * f x') x := by
+      intro x
+      rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}) with hmem | hmem
+      · rw [Set.indicator_of_mem hmem]
+        exact mul_nonneg (by linarith [norm_nonneg x]) (hf0 x)
+      · rw [Set.indicator_of_notMem hmem]
+    have hT2le : ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x ∂volume
+        + ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x ∂volume
+        ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x ∂volume
+        + ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ)))|) x ∂volume
+        + ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) x ∂volume :=
+      le_add_of_nonneg_right (MeasureTheory.integral_nonneg hT2pos)
+    have hAeq : ∫ x : EuclideanSpace ℝ (Fin n),
+          {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}.indicator
+            (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|) x ∂volume
+      = ∫ x in {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1},
+          (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x| ∂volume :=
+      MeasureTheory.integral_indicator hmeasCore
+    linarith [hT2le, hA, hAeq, hT1 k, hT2, hδε]
+  exact (Filter.tendsto_add_atTop_iff_nat k₀).mp hmain
+
+/-- Translation invariance of Bochner integrals, in the `y − c` form (cf.
+`integral_toLp_trans_right`). -/
+theorem integral_shift_neg {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F]
+    [NormedSpace ℝ F] [CompleteSpace F] [OpensMeasurableSpace F]
+    [TopologicalSpace.PseudoMetrizableSpace F] [SecondCountableTopology F] (n : ℕ)
+    (c : Fin n → ℝ) (g : EuclideanSpace ℝ (Fin n) → F)
+    (hg : MeasureTheory.AEStronglyMeasurable g volume) :
+    ∫ y : EuclideanSpace ℝ (Fin n), g (WithLp.toLp 2 ((y : Fin n → ℝ) - c)) ∂volume =
+      ∫ y : EuclideanSpace ℝ (Fin n), g y ∂volume := by
+  rw [show (fun y : EuclideanSpace ℝ (Fin n) => g (WithLp.toLp 2 ((y : Fin n → ℝ) - c)))
+      = fun y : EuclideanSpace ℝ (Fin n) => g (WithLp.toLp 2 ((y : Fin n → ℝ) + (-c))) from by
+      funext y; rw [sub_eq_add_neg]]
+  exact integral_toLp_trans_right n (-c) g hg
+
+/-- Translation invariance of Lebesgue integrals, in the `y − c` form. -/
+theorem lintegral_shift_neg (n : ℕ) (c : Fin n → ℝ) (g : EuclideanSpace ℝ (Fin n) → ℝ≥0∞)
+    (hg : Measurable g) :
+    ∫⁻ y : EuclideanSpace ℝ (Fin n), g (WithLp.toLp 2 ((y : Fin n → ℝ) - c)) ∂volume =
+      ∫⁻ y : EuclideanSpace ℝ (Fin n), g y ∂volume := by
+  rw [show (fun y : EuclideanSpace ℝ (Fin n) => g (WithLp.toLp 2 ((y : Fin n → ℝ) - c)))
+      = fun y : EuclideanSpace ℝ (Fin n) => g (WithLp.toLp 2 ((y : Fin n → ℝ) + (-c))) from by
+      funext y; rw [sub_eq_add_neg]]
+  exact lintegral_toLp_trans_right n (-c) g hg
