@@ -472,6 +472,27 @@ clean):
   `hΦint`, the inner `integral_congr_ae` with `integral_const_mul + hshiftmass + mul_one`,
   and `integral_mollifier`); `isPdf_gaussSmoothed` is done.
 
+**RE-APPLIED (latest round) — all blocks restored and verified:** the file is back to its
+full pre-truncation state (2369 lines, zero `sorry`, full build green, axioms clean):
+1. `mollifier_le_zero` — DONE.
+2. `mollifier_integrable` — DONE.
+3. `lintegral_mollifier_mul_norm` — DONE.
+4. `weightedModulus` def + `weightedModulus_le` + `aemeasurable_weightedModulus` — DONE.
+5. `weighted_smoothing_tendsto_seq` — DONE (public, ~700 lines; Step A per-x identity,
+   Step B ∫⁻-Tonelli joint integrability + Fubini calc + `integral_mollifier_mul`
+   transport, Step C shifted-sequence DCT + final sandwich).
+6. `Main.lean`: `multivariateGaussianPDF_le_const` is `public`.
+7. `AxiomCheck.lean` audits `isPdf_gaussSmoothed`, `weighted_modulus_tendsto_seq`,
+   `weighted_smoothing_tendsto_seq` (all `public` in ApproximationByGMM.lean).
+
+Phase 1 remaining work (design not affected by the incident):
+* the hw-existence theorem: `σ K = 1/(K+1)`, `IsPdf (gaussSmoothed n f C hC (1/(K+1)))` per
+  `K` (via `isPdf_gaussSmoothed`), and the `hw` of `cme_uniform_balls_R` via the smoothing
+  theorem + the `ofReal_integral_eq_lintegral_ofReal` conversion
+  (`∫⁻ ofReal ((1+‖h‖)·|f h − fhK h|) = ofReal (∫ …) < ofReal ε` from a real-∫ bound);
+* the composed corollary through `cme_uniform_balls_R` (Phase 1 deliverable);
+* `plan.md` status updates.
+
 **LOST in the truncation and still to be REWRITTEN (all tactics were verified once this
 session, so this is re-application, not design):**
 1. `mollifier_le_zero` (mollifier ≤ peak at 0, via `multivariateGaussianPDF_le_const`,
