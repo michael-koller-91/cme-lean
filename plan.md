@@ -485,6 +485,20 @@ full pre-truncation state (2369 lines, zero `sorry`, full build green, axioms cl
 7. `AxiomCheck.lean` audits `isPdf_gaussSmoothed`, `weighted_modulus_tendsto_seq`,
    `weighted_smoothing_tendsto_seq` (all `public` in ApproximationByGMM.lean).
 
+**Latest round (continued after recovery):** the per-σ smoothing machinery has been
+EXTRACTED into standalone public lemmas (copy-based, the smoothing theorem untouched and
+still compiling):
+* `measurable_mollifier` (new top-level lemma; fun_prop needs a `Measurable (mollifier …)`
+  hypothesis in context — this was the blocker for the extracted blocks),
+* `measurable_joint_first` (the ψ-first joint difference integrand's measurability),
+* `stepA_gaussSmoothed` (the per-x pointwise identity; note `WithLp.ofLp_neg` for the
+  reflection congruence),
+* `integrable_joint_first` (the ∫⁻-Tonelli joint integrability, ψ-first),
+* `integrable_joint_second` (the x-first orientation via the measure-preserving swap;
+  note the ∏-∘ vs flat-lambda syntactic-mismatch trap: provide the meas-arg as a
+  previously-`have`-bound FLAT-lambda lemma, never an inline `.mul`/`.comp` term).
+All compiling, zero `sorry`, AxiomCheck green.
+
 Phase 1 remaining work (design not affected by the incident):
 * the hw-existence theorem: `σ K = 1/(K+1)`, `IsPdf (gaussSmoothed n f C hC (1/(K+1)))` per
   `K` (via `isPdf_gaussSmoothed`), and the `hw` of `cme_uniform_balls_R` via the smoothing
