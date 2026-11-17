@@ -1371,5 +1371,32 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
       rw [lintegral_congr_ae (Filter.Eventually.of_forall hinner), lintegral_mollifier]
       exact ENNReal.one_lt_top
     -- the mass: ∫_x gaussSmoothed x dx = ∫_u ψ(u)·(∫_x f(x−u) dx) du = ∫_u ψ(u) du = 1
-    -- (Fubini via hΦint + integral_prod; the joint integrability is hΦint)
+    have hAint' : MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
+        EuclideanSpace ℝ (Fin n) => mollifier n C hC σ hσ p.2 *
+          f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ)))) (volume.prod volume) := by
+      have hmp : MeasureTheory.MeasurePreserving (Prod.swap : EuclideanSpace ℝ (Fin n) ×
+          EuclideanSpace ℝ (Fin n) → EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n))
+          (volume.prod volume) (volume.prod volume) :=
+        MeasureTheory.Measure.measurePreserving_swap
+      exact (hmp.integrable_comp hΦmeas.aestronglyMeasurable).mpr hΦint
+    have hshiftmass : ∀ u : EuclideanSpace ℝ (Fin n), ∫ x : EuclideanSpace ℝ (Fin n),
+        f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) ∂volume = 1 := by
+      intro u
+      rw [integral_shift_neg n (u : Fin n → ℝ) f hfi.1]
+      exact hpdf.2
+    show ∫ x : EuclideanSpace ℝ (Fin n),
+        ∫ u : EuclideanSpace ℝ (Fin n), mollifier n C hC σ hσ u *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) ∂volume ∂volume = 1
+    rw [← MeasureTheory.integral_prod (f := fun p : EuclideanSpace ℝ (Fin n) ×
+      EuclideanSpace ℝ (Fin n) => mollifier n C hC σ hσ p.2 *
+        f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ)))) hAint',
+      ← MeasureTheory.integral_prod_swap (f := fun p : EuclideanSpace ℝ (Fin n) ×
+        EuclideanSpace ℝ (Fin n) => mollifier n C hC σ hσ p.2 *
+          f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ))))]
+    -- remaining: the inner-∫ transport (∫_y f(y−x) dy = 1 via hshiftmass, then
+    -- integral_const_mul + mul_one) and integral_mollifier; the goal's ∫-term is the
+    -- single-∫-over-product form ∫ z, gA z.swap ∂(vol.prod vol) whose ψ-coordinate is
+    -- the pair's SECOND after the swap (i.e. z.1 = the OUTER in the Tonelli reading) —
+    -- the transport needs the ψ-const-in-inner orientation via a stated hinner in the
+    -- exact z.swap-shapes; deferred to next round
     sorry

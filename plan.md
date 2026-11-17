@@ -349,6 +349,40 @@ the `hΦint`-style joint integrability for the ψ-weighted integrand and the out
 with dominator `φ_C(v)·2(1+M_f)`, closed via `weighted_modulus_tendsto_seq`), the
 hw-existence theorem (`σ_K = 1/(K+1)`), and the corollary via `cme_uniform_balls_R`.
 
+**Latest round: the Fubini mass-chain for `isPdf_gaussSmoothed` is nearly complete.**
+New proven steps: `hAint'` (the gA-form joint integrability via
+`measurePreserving_swap.integrable_comp .mpr hΦint` — note the full name
+`MeasureTheory.Measure.measurePreserving_swap`), `hshiftmass` (∫-level shift invariance
+via `integral_shift_neg`), and the three-step ∫-rw chain through
+`integral_prod` (← form, `hAint'`) + `integral_prod_swap` (the ← form: the
+`rw [integral_prod_swap (f := …)]` FORWARD direction fails to match when the goal's
+integrand has already been beta-reduced — the `←` direction matches the unreduced
+`z.swap` pattern) landing on `∫ z, gA z.swap ∂(vol.prod vol)`.
+
+**Remaining for the mass (next round):**
+1. The swapped-pair congr `gA z.swap = Φ z` (a `Prod.swap`-projection simp; the
+   `integral_congr_ae` attempt with an inner `sorry` closed the goal vacuously — state
+   the congr as a typed `have` with both sides explicit).
+2. `integral_prod` with `f := Φ` (hΦint), giving `∫_u ∫_x ψ(u) f(x−u) dx du`.
+3. The inner ∫_x transport: `integral_const_mul` + `hshiftmass` + `mul_one`, then
+   `integral_mollifier`.
+
+**Latest round: the Fubini mass-chain orientation fully diagnosed.** The three-step
+∫-rw chain now lands on the single-∫-over-product form
+`∫ z, gA z.swap ∂(vol.prod vol)` (after `integral_prod` ← with hAint', then
+`integral_prod_swap` ← — the ← direction is REQUIRED: the forward direction fails to
+match beta-reduced integrands). Key finding: after the `integral_prod_swap`, the
+iterated form via `integral_prod` re-iterates with the ψ-coordinate as the INNER
+variable (wrong orientation), so the transport must be stated directly on the
+single-∫-over-product form with a typed `hinner` in the exact `z.swap`-shapes
+(the `integral_const_mul` with a `_` metavariable for the ψ-term also fails to
+elaborate/match under the goal's binder structure). The remaining steps for the mass:
+(a) a typed `hinner : ∀ z, mollifier … z.swap.2 * f (toLp(z.swap.1 − z.swap.2))
+= mollifier … z.1 * 1` in the exact goal shapes (using `hshiftmass` for the
+`f (toLp(z.swap.1 − z.swap.2)) = 1` part), (b) `simp only [hinner]`, (c)
+`integral_mollifier`. Then the smoothing theorem `weighted_smoothing_tendsto_seq` and
+the hw-existence theorem + corollary.
+
 **Remaining (next round):**
 1. `weighted_modulus_tendsto` (the `(T)`-lemma): for continuous `f` with finite first
    moment, `G(u) = ∫ (1+‖x‖) |f (x−u) − f x| dx → 0` as `u → 0`. Proof: core/tail split —
