@@ -1277,6 +1277,13 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
   have hfm : Measurable f := hf.measurable
+  have hψmeas' : Measurable (mollifier n C hC σ hσ) := by
+    show Measurable (fun u : EuclideanSpace ℝ (Fin n) => (σ : ℝ)⁻¹ ^ n *
+      multivariateGaussianPDF n 0 C hC
+        (WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ))))
+    exact ((measurable_multivariateGaussianPDF n 0 C hC).comp
+      (by fun_prop : Measurable fun u : EuclideanSpace ℝ (Fin n) =>
+        WithLp.toLp 2 ((σ : ℝ)⁻¹ • (u : Fin n → ℝ)))).const_mul ((σ : ℝ)⁻¹ ^ n)
   have hgnonneg : ∀ x : EuclideanSpace ℝ (Fin n),
       0 ≤ ∫ u : EuclideanSpace ℝ (Fin n),
         mollifier n C hC σ hσ u *
@@ -1285,9 +1292,72 @@ theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (
       (fun u => mul_nonneg (mollifier_nonneg n C hC σ hσ u) (hf0 _))
   refine ⟨?_, ?_⟩
   · exact hgnonneg
-  · -- the mass via Fubini over the pair (u, x):
-    --   ∫_x gaussSmoothed x dx = ∫_u ψ_σ(u) (∫_x f (x−u) dx) du = ∫_u ψ_σ(u) du = 1,
-    --   via `integral_prod` (joint integrability by Tonelli with the ∫⁻_x inner
-    --   transportable through `lintegral_shift_neg`, the outer ∫⁻_u being
-    --   `lintegral_mollifier`). Deferred to the next round.
+  · -- the mass via Fubini over the pair (x, u)
+    have hflint : ∫⁻ x : EuclideanSpace ℝ (Fin n), ‖f x‖ₑ ∂volume = 1 := by
+      have hpt : ∀ x : EuclideanSpace ℝ (Fin n), ‖f x‖ₑ = ENNReal.ofReal (f x) :=
+        fun x => Real.enorm_eq_ofReal (hf0 x)
+      rw [lintegral_congr_ae (Filter.Eventually.of_forall hpt),
+        ← MeasureTheory.ofReal_integral_eq_lintegral_ofReal hfi
+          (Filter.Eventually.of_forall hf0), hpdf.2]
+      exact ENNReal.ofReal_one
+    have hshift : ∀ u : EuclideanSpace ℝ (Fin n),
+        ∫⁻ x : EuclideanSpace ℝ (Fin n),
+          ‖f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))‖ₑ ∂volume = 1 := fun u => by
+      rw [lintegral_shift_neg n (u : Fin n → ℝ) (fun x => ‖f x‖ₑ) hfm.enorm]
+      exact hflint
+    -- the joint integrand on the pair (x, u)
+    have hΦmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+        mollifier n C hC σ hσ p.1 *
+          f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ)))) :=
+      ((hψmeas'.comp (by fun_prop : Measurable fun p : EuclideanSpace ℝ (Fin n) ×
+        EuclideanSpace ℝ (Fin n) => p.1)).mul
+        (hfm.comp (by fun_prop : Measurable fun p : EuclideanSpace ℝ (Fin n) ×
+          EuclideanSpace ℝ (Fin n) =>
+            WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ)))))
+    -- joint integrability: Tonelli with the pair's FIRST coordinate carrying ψ,
+    -- so the inner ∫⁻_x sees ψ as a constant and is transportable
+    have hΦint : MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
+        EuclideanSpace ℝ (Fin n) => mollifier n C hC σ hσ p.1 *
+          f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ))))
+        (volume.prod volume) := by
+      refine ⟨?_, ?_⟩
+      · exact ((hψmeas'.comp (by fun_prop : Measurable fun p : EuclideanSpace ℝ (Fin n) ×
+          EuclideanSpace ℝ (Fin n) => p.1)).mul
+          (hfm.comp (by fun_prop : Measurable fun p : EuclideanSpace ℝ (Fin n) ×
+            EuclideanSpace ℝ (Fin n) =>
+              WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ))))).aestronglyMeasurable
+      rw [MeasureTheory.hasFiniteIntegral_iff_enorm]
+      refine lt_of_le_of_lt (MeasureTheory.lintegral_prod_le _) ?_
+      -- the inner ∫⁻ transport: the ∫⁻_y integrand becomes the ψ·‖f‖ₑ split form
+      have hpt : ∀ x y : EuclideanSpace ℝ (Fin n),
+          ‖(fun q : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+              mollifier n C hC σ hσ q.1 *
+                f (WithLp.toLp 2 ((q.2 : Fin n → ℝ) - (q.1 : Fin n → ℝ)))) (x, y)‖ₑ
+          = ENNReal.ofReal (mollifier n C hC σ hσ x) *
+              ENNReal.ofReal (f (WithLp.toLp 2
+                ((y : Fin n → ℝ) - (x : Fin n → ℝ)))) := by
+        intro x y
+        rw [Real.enorm_eq_ofReal (mul_nonneg (mollifier_nonneg n C hC σ hσ x)
+          (hf0 (WithLp.toLp 2 ((y : Fin n → ℝ) - (x : Fin n → ℝ))))),
+          ENNReal.ofReal_mul (mollifier_nonneg n C hC σ hσ x)]
+      rw [lintegral_congr_ae (Filter.Eventually.of_forall fun x => by
+        exact lintegral_congr_ae (Filter.Eventually.of_forall (hpt x)))]
+      -- the inner ∫⁻: ψ(p.1) · (∫⁻ ‖f (·−p.1)‖ₑ) = ofReal (ψ p.1)
+      have hinner : ∀ a : EuclideanSpace ℝ (Fin n),
+          ∫⁻ b : EuclideanSpace ℝ (Fin n),
+            ENNReal.ofReal (mollifier n C hC σ hσ a) *
+              ‖f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))‖ₑ ∂volume
+          = ENNReal.ofReal (mollifier n C hC σ hσ a) := by
+        intro a
+        have hmeas' : Measurable (fun b : EuclideanSpace ℝ (Fin n) =>
+            ‖f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))‖ₑ) := by
+          have heq : (fun b : EuclideanSpace ℝ (Fin n) =>
+              ‖f (WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)))‖ₑ)
+            = (fun x => ‖f x‖ₑ) ∘ fun b : EuclideanSpace ℝ (Fin n) =>
+                WithLp.toLp 2 ((b : Fin n → ℝ) - (a : Fin n → ℝ)) := rfl
+          rw [heq]
+          exact hfm.enorm.comp (by fun_prop)
+        rw [MeasureTheory.lintegral_const_mul (ENNReal.ofReal (mollifier n C hC σ hσ a))
+          hmeas', hshift a, mul_one]
+      sorry
     sorry

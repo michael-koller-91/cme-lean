@@ -316,6 +316,25 @@ mass-component):**
    (an inline `fun x => integral_nonneg ...` under a `refine ⟨?_, ?_⟩` gets stuck
    instance synthesis); `exact hgnonneg` closes the function-≤ goal directly.
 
+**Latest round's progress (one `sorry` remains, in the `isPdf_gaussSmoothed` mass):**
+1. `isPdf_gaussSmoothed` nonnegativity: DONE (the typed `have hgnonneg` pattern).
+2. The Fubini mass-chain for `isPdf_gaussSmoothed`: the hflint (`∫⁻ ‖f‖ₑ = 1` via
+   `Real.enorm_eq_ofReal` + `ofReal_integral_eq_lintegral_ofReal` + `hpdf.2`), hshift
+   (∫⁻ shift-invariance of ‖f‖ₑ via `lintegral_shift_neg`), hΦmeas, and the joint
+   integrability hΦint are DONE up to the last two rewrites: the `hinner` transport
+   (`lintegral_const_mul` with the `hmeas'` Measurable supplied through a `heq := rfl`
+   function-composition rewrite — the `hfm.enorm.comp` form produces `∘`-terms that do
+   NOT syntactically match `∫⁻`-integrands) is in place; what remains is (a) rewriting
+   the inner ∫⁻ integrand from the ‖f‖ₑ-form to the `ofReal (f …)`-form (the hinner's
+   stated form has `‖f (… )‖ₑ` while the goal after the hpt-congr has
+   `ENNReal.ofReal (f …)` — restate hinner in the ofReal form via a second hpt) and
+   (b) closing the outer ∫⁻ with `lintegral_mollifier` (the goal after the hinner-simp
+   is `∫⁻ a, ofReal (mollifier … a)`, which already matches `lintegral_mollifier`'s
+   statement — no congr needed). Note the goal's ∫⁻ after `lintegral_prod_le` is the
+   CURRIED two-binder form `∫⁻ a, ∫⁻ b, …`, so the hpt congr must be stated for the
+   inner integrand of that curried form.
+3. The remaining mass-chain `∫ gaussSmoothed = 1` via `integral_prod` is untouched.
+
 **Remaining (next round):**
 1. `weighted_modulus_tendsto` (the `(T)`-lemma): for continuous `f` with finite first
    moment, `G(u) = ∫ (1+‖x‖) |f (x−u) − f x| dx → 0` as `u → 0`. Proof: core/tail split —
