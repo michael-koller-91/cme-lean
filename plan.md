@@ -156,9 +156,13 @@ continuity or decay of `f` is used.
    roles: only `δ/σ → 0` is needed; no bandwidth–cell-size matching (that is only
    needed for sup-norm approximation, which we do not attempt).
 
-3. **Mixtures are pdfs.** `∫ f_K = ∑_j w_j = ∫_{box} f`, plus the tail argument below,
-   give `IsPdf (f_K)`. The nonnegativity is immediate; the mass computation is a finite
-   sum of `∫ φ_σ = 1` terms (via `integral_multivariateGaussianPDF_one`).
+3. **Mixtures are pdfs.** `∫ f_K = ∑_j w_j = ∫_{box} f =: c`, which is `< 1` in
+   general — so the literal `f_K` is NOT a pdf. Fix (settled design decision, see the
+   Phase 2 section): add a **residual weight `1 − c` at the origin lattice point**
+   (`0` is a lattice point since `Q_δ 0 = 0`); then the mass is
+   `∑_j w_j + (1 − ∑_j w_j) = 1` and nonnegativity needs only `c ≤ 1`. The mass
+   computation is a finite sum of `∫ φ_σ = 1` terms (via
+   `integral_multivariateGaussianPDF_one`).
 
 4. **Tails.** Cover only a box `B_R` with `∫_{‖x‖ > R} w f` small (possible since
    `∫ w f < ∞`). Outside the covered region, `f_K`'s mass comes only from boundary
@@ -481,24 +485,157 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines)
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **PLANNED (execution-level breakdown below)**
 
-The smoothing–quantization construction above: lattice cells, cell weights, finite-sum
-bookkeeping, tail control, diagonalization.
+The smoothing–quantization construction above, decomposed into ordered steps. Everything
+listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
+strategy = the "Proof strategy" section above; this is the formalization-level plan.
 
-Deliverables:
-* `weighted_translation_cont` (from Phase 1) reused.
-* The lattice construction: `Q_δ`, measurable cells, `Finset` of lattice points in a
-  box, weights as integrals over cells; measurability and `IsPdf` of the mixture.
-* The quantization estimate and the moment/tail bounds.
-* The full **GMM density theorem** (statement at the top of this file).
-* Final corollary: for every pdf prior with finite first moment, the GMM sequence
-  satisfies `hw`, hence (by `cme_uniform_balls_R`) the GMM-based CMEs converge to the
-  true CME locally uniformly.
+**Design decisions (settled):**
 
-Risk register: the fiddliest parts are (a) defining the lattice partition measurably
-and doing the finite-sum/integral interchanges, and (b) the tail estimates outside the
-covered box. Both are routine but voluminous; neither involves new mathematical ideas.
+* **Normalization for `IsPdf` — residual atom at the origin.** `∑_j w_j = ∫_{B_R} f =: c`
+  is `< 1` in general, so the literal finite sum is not a pdf. Define
+  `gmmApprox f R σ δ x := ∑_{j ∈ S(R,δ)} W_j · φ_σ(x − j) + (1 − ∑_{j∈S} W_j) · φ_σ(x)`
+  (two terms; do NOT try to fold the residual into the `Finset` — the insertion
+  bookkeeping when `0 ∈ S` is worse than a separate summand). Chosen over normalized
+  weights `w_j/c` because: (i) no division anywhere (option (a) needs the side lemma
+  `c > 0`, i.e. a separate tail argument, plus `1/c`-bookkeeping in every identity);
+  (ii) the mass is a plain `Finset`-sum + one term (Phase 0's `integral_finsetSum`
+  pattern); (iii) nonnegativity needs only `c ≤ 1` (trivial: `f ≥ 0`, total mass 1,
+  `set_integral` mono); (iv) the residual's weighted error `(1−c)·∫ w φ_σ =
+  (1−c)(1 + σ·M)` is controlled by the SAME `R`-tail budget as the outside-the-box
+  term, since `1 − c = ∫_{B_R^c} f ≤ ∫_{B_R^c} w f` — no extra ε-slot in the budget
+  assembly; (v) the result is still an honest GMM (finitely many Gaussians, common
+  covariance `σ²·I`, bounded locations).
+* **Diagonal choice:** `σ K = 1/(K+1)`, `δ K = σ K² = 1/(K+1)²`, `R K = K+1`. What must
+  tend to 0 is `δ K / σ K = σ K` (scaled-modulus argument, Step 3) — per-σ modulus
+  continuity would NOT be uniform along the diagonal.
+* **Moments of the approximants are NOT needed:** `cme_uniform_balls_R` requires
+  `hfmom` only for the true prior `fh`, and `IsPdf` per approximant
+  (`Main.lean` signature). So `Integrable (‖·‖·f_K)` is optional — skip unless a lemma
+  needs it. (Per-K integrability of `w·|f − f_K|`, needed for the `hw` ∫⁻-bridge, IS
+  needed — via domination `|f − f_K| ≤ f + f_K` and the weighted mass of `f_K`:
+  `∫ w f_K = c·(1+R+σM)·-bound + (1−c)(1+σM) < ∞`, a `set_integral` + `Finset`-sum
+  computation.)
+
+**Step 0 — weighted translation continuity for INTEGRABLE `f`
+(`weighted_modulus_tendsto_integrable`).** `G_f(u) := ∫ (1+‖x‖)·|f x − f (x−u)| dx → 0`
+as `u → 0` for `f ≥ 0` integrable with finite first moment — the (T)-lemma WITHOUT
+continuity; the one genuinely new analytic input. Core/tail architecture (Phase 1's
+(T)-lemma with the core replaced by Mathlib's L¹ translation continuity):
+* core: `∫_{‖x‖ ≤ R} |f x − f(x−u)| dx → 0` via the route identified in the Mathlib
+  note (`Lp.instContinuousSMulDomMulAct`, Haar-measured finite-dim spaces — verify the
+  exact lemma name/statement for `EuclideanSpace ℝ (Fin n)` + `volume` before
+  committing; watch the `(−u) • f` sign convention vs. `f (x−u)`);
+* tail: `setIntegral_tail_tendsto` for `(1+‖x‖)·f` + the translate-tail transport
+  (Phase 1's threshold-shift trick: move the indicator INTO the transported function;
+  `∫_{‖x‖>R}(1+‖x‖)|f(x−u)| ≤ (1+‖u‖)·tail(R−‖u‖)` via the `htri`-style
+  `‖x‖ ≤ ‖x−u‖+‖u‖` bound);
+* assembly: both `Filter.Tendsto G_f (𝓝 0) (𝓝 0)` (pointwise-in-`u` input for the DCTs)
+  and the ε-δ form. The unweighted corollary `∫|f x − f(x−u)| → 0` follows by
+  domination (`1 ≤ w`); the weighted form is needed for Step 1, the unweighted for
+  nothing (Step 3 uses the (T)-lemma at `φ_1`, see below).
+
+**Step 1 — smoothing for general `f` (`weighted_smoothing_integrable`).**
+`∫ w·|f − f⋆φ_σ| → 0` as `σ → 0` (`f` integrable + finite first moment, NO continuity):
+* Tonelli block: `(x,y) ↦ φ_σ(y)·(1+‖x‖)·|f x − f(x−y)|` integrable on the product
+  (`∫∫ ≤ (2+‖y‖)·∫wf`-bound + `integrable_toLp_shift` — Phase 1 patterns), giving
+  `∫ w|f − f⋆φ_σ| ≤ ∫ φ_σ(y)·G_f(y) dy`;
+* σ→0 limit = the smoothing theorem's Step C pattern verbatim: transport
+  `∫ φ_σ(y)·G_f(y) dy = ∫ φ_1(z)·G_f(σz) dz` via `integral_subst` (the
+  `integral_mollifier_mul` transport), DCT against the fixed integrable dominator
+  `(2+‖z‖)·∫wf` (for `σ ≤ 1`), pointwise limit `G_f(σz) → 0` from Step 0 + `σz → 0`
+  (`tendsto_const_nhds.mul`-style composition + typed `Filter.Tendsto.congr`).
+
+**Step 2 — lattice construction.**
+* `latticeQ δ := fun t => δ • ⌊t/δ⌋` componentwise (`Real.floor` per coordinate on the
+  `Fin n → ℝ` projection; watch the `WithLp` coercion care from Phase 1's shifts);
+  `Measurable (latticeQ δ)` (measurability of `floor`-composed maps);
+* displacement bound `‖latticeQ δ t − t‖ ≤ δ·√n`: per-coordinate
+  `|δ·⌊tᵢ/δ⌋ − tᵢ| ≤ δ` (floor inequality manipulation), then the `n`-coordinate
+  Euclidean norm bound (`EuclideanSpace.norm_eq` + squaring);
+* the box: use the SUP-NORM box `B_R = {t | ∀ i, |t i| ≤ R}` (NOT the Euclidean ball —
+  the `Finset` enumeration is then a `Finset.product` of finite `ℤ`-ranges via
+  `Finset.range`/`Ico`, much cleaner); `B_R ⊆ {‖t‖ ≤ R·√n}`;
+* the `Finset` `S(R,δ)` of lattice points in the box (only finiteness needed, not the
+  count); cells `cell_j = latticeQ δ ⁻¹' {j} ∩ B_R` measurable;
+* weights `W_j := ∫_{cell_j} f ∂volume` (`MeasureTheory.setIntegral`); the partition
+  identity `∑_{j∈S} ∫_{cell_j} g = ∫_{B_R} g` for `g ≥ 0` (measurable finite partition
+  `set_integral` lemmas — the voluminous bookkeeping the risk register flags).
+
+**Step 3 — quantization estimate (`gmmApprox_quantization`).**
+Split `f⋆φ_σ = ∫_{B_R} + ∫_{B_R^c}` at the box; with Step 4's identity:
+`∫ w|f_K − f⋆φ_σ| ≤ ∫_{B_R} f(t)·weightedModulus n φ_σ (t − Q_δ t) dt
+  + (1+σM)·[(1−c) + ∫_{B_R^c} w f]` — the first term via the Tonelli joint block
+  (Phase 1 `ofReal` patterns) and the uniform displacement bound
+  `‖t − Q_δ t‖ ≤ δ√n`; the tail term via `1 − c ≤ ∫_{B_R^c} w f`.
+* **Scaled-modulus lemma** `weightedModulus_gaussian_scale`: with `x = σy`
+  (`integral_subst` transport), `∫ w(x)|φ_σ(x+s) − φ_σ(x)| dx
+  = ∫ (1+σ‖y‖)|φ_1(y+s/σ) − φ_1(y)| dy ≤ L₁(s/σ) + σ·(2M_1 + ‖s/σ‖)`, where
+  `L₁(v) := ∫|φ_1(y+v) − φ_1(y)| dy ≤ weightedModulus n φ_1 v` — so `L₁(s/σ) → 0`
+  by the ALREADY-PROVEN `weighted_modulus_tendsto_seq` at `f := φ_1`
+  (`φ_1` is a continuous pdf with finite first moment: `isPdf_multivariateGaussianPDF`,
+  `integrable_norm_mul_gaussianPDF_center`), and `σ·(2M_1 + ‖s/σ‖) → 0` along
+  `s = δ_K√n`, `σ = σ_K` since `δ_K/σ_K = σ_K → 0`. NOTE: this corrects the old
+  deliverable "`weighted_translation_cont` (from Phase 1) reused" — Phase 1 never
+  formalized that lemma; the kernel's modulus is covered by the existing (T)-lemma,
+  and the general-`f` modulus is Step 0.
+
+**Step 4 — the integral identity (`gmmApprox_integral_identity`).**
+`∑_{j∈S} W_j·φ_σ(x−j) = ∫_{B_R} f(t)·φ_σ(x − Q_δ t) dt`: the integrand
+`φ_σ(x − Q_δ t)` is constant = `φ_σ(x−j)` on each cell, so the identity is the same
+measurable-partition `set_integral` machinery as Step 2 (per-cell pull-out + `Finset`
+sum). This is what makes the quantization term a single Tonelli block rather than a
+sum of cell estimates.
+
+**Step 5 — `IsPdf (gmmApprox f R σ δ)` (`isPdf_gmmApprox`).**
+Nonnegativity (both terms; `1 − c ≥ 0` from `c ≤ 1`); mass
+`∑_{j∈S} W_j + (1 − ∑_{j∈S} W_j) = 1` via `integral_finsetSum` +
+`integral_gaussianPDF` (`∫ φ_σ = 1`) + `mul_one`, with the partition identity at
+`g = f` for `∑ W_j = c`. Measurability: finite sum of measurable (Gaussian-shift)
+terms — Phase 0's `gmmPDF` measurability pattern.
+
+**Step 6 — the sequence + diagonal (`gmmPriorSeq`) and `hw`.**
+`fhK K := gmmApprox f (K+1) (1/(K+1)) (1/(K+1)²)`. Triangle:
+`∫ w|f − fhK K| ≤ [smoothing @ σ_K] + [quantization @ (σ_K, δ_K)] + [no third term —
+the tails were folded into the quantization estimate's budget]`. Each term is
+eventually `< ε` (or `< ε/2` each): smoothing by Step 1 (`σ_K → 0`), quantization by
+Step 3 (`σ_K → 0`, `δ_K/σ_K = σ_K → 0`). Then the `hw` conversion — the Phase 1
+`hw_smoothedPriorSeq` pattern VERBATIM: per-K `Integrable w·|f − fhK K|` by
+domination (`|f − f_K| ≤ f + f_K`, both weighted-integrable: `f` via
+`hfi.add hfmom`-style, `f_K` via the weighted-mass computation in the design-decisions
+block), `ofReal_integral_eq_lintegral_ofReal` bridge,
+`(ENNReal.ofReal_lt_ofReal_iff hε).mpr`.
+
+**Step 7 — the corollary (`cme_uniform_balls_gmm_prior_general`).**
+`cme_uniform_balls_R m n S hS A f hpdf hfmom gmmPriorSeq (fun K => isPdf_gmmApprox …)
+(hw_gmmPriorSeq …) r hr` — the Phase 1 corollary pattern
+(`cme_uniform_balls_smoothed_prior`), with the defeq/proof-irrelevance care for the
+sequence arguments.
+
+**Deliverables checklist:**
+* `weighted_modulus_tendsto_integrable` (Step 0), `weighted_smoothing_integrable` (Step 1)
+  — the two new analytic lemmas.
+* `latticeQ` + geometry, `S`/`W`/cells + partition identity (Step 2),
+  `gmmApprox_integral_identity` (Step 4).
+* `gmmApprox` def + `isPdf_gmmApprox` (Steps 3/5), `gmmApprox_quantization` (Step 3).
+* `gmmPriorSeq` + `hw_gmmPriorSeq` (Step 6), `cme_uniform_balls_gmm_prior_general`
+  (Step 7).
+* The **GMM density theorem** (statement at the top of this file) is exactly the
+  ∫-form of Step 6's convergence; state it as a corollary of the same assembly.
+* `AxiomCheck.lean` audits for every new public theorem (Phase 1 convention).
+* Follow the Phase 1 file layout: public defs/lemmas in `ApproximationByGMM.lean`,
+  appended in dependency order.
+
+**Risk register (updated):** (a) the L^p-translation-continuity Mathlib route (Step 0
+core) — verify the exact lemma name/statement for `EuclideanSpace` + `volume` FIRST;
+if the weighted form resists, fall back to the unweighted L¹ route + the Phase 1 tail
+architecture (the original `weighted_translation_cont` shape). (b) the
+measurable-partition `set_integral` bookkeeping (Steps 2/4) — voluminous but standard;
+no new math. (c) the diagonal assembly (Step 6) — keep the ε-budgets as explicit named
+`have`s; the ordering σ → R → δ within each `K` mirrors the Proof-strategy section.
+(d) `Real.floor` manipulation under `WithLp` coercions (Step 2) — expect the usual
+coercion gotchas; do the geometry on the `Fin n → ℝ` projection first.
 
 ### Non-goals / explicit caveats
 
