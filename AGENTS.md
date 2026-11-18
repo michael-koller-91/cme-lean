@@ -1,1 +1,1 @@
-Don't use `git`. But you can use `git checkout Main.lean` or `git restore Main.lean` if they are needed.
+Ask if you want to use `git`. Try to avoid `git`.
