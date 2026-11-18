@@ -38,3 +38,33 @@ info: 'weighted_smoothing_tendsto_seq' depends on axioms: [propext, Classical.ch
 -/
 #guard_msgs in
 #print axioms weighted_smoothing_tendsto_seq
+
+/--
+info: 'integrable_joint_smooth_prior' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms integrable_joint_smooth_prior
+
+/--
+info: 'measurable_gaussSmoothed' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms measurable_gaussSmoothed
+
+/--
+info: 'integrable_weighted_abs_diff_gaussSmoothed' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms integrable_weighted_abs_diff_gaussSmoothed
+
+/--
+info: 'hw_smoothedPriorSeq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms hw_smoothedPriorSeq
+
+/--
+info: 'cme_uniform_balls_smoothed_prior' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms cme_uniform_balls_smoothed_prior

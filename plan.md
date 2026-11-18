@@ -218,7 +218,62 @@ Formalization notes discovered during Phase 0 (relevant for Phases 1–2):
 Limitation: the sequence is constant, so it only helps when the true prior *is* a GMM.
 For general `f`, Phases 1/2 are needed.
 
-### Phase 1 — continuum-mixture sequence (~150–250 lines) — **IN PROGRESS**
+### Phase 1 — continuum-mixture sequence (~150–250 lines) — **DONE**
+
+**Status (final, this round): Phase 1 is complete.** The smoothed-prior sequence
+`smoothedPriorSeq n f C hC K = gaussSmoothed … (1/(K+1))` satisfies the `hw` hypothesis of
+`cme_uniform_balls_R`, and the composed corollary `cme_uniform_balls_smoothed_prior` is proven.
+Everything below is historical progress narrative.
+
+**Final round (this session) — what was proven:**
+1. `integrable_joint_smooth_prior` (ψ-first joint, the missing piece from last round):
+   the `hkey` product-merge chain needed THREE `← ENNReal.ofReal_mul` rewrites in
+   innermost-first order — but with the caveat that the hypothesis of each
+   `ofReal_mul` instance PINS its first factor (`?a`), so the rewrite only fires at
+   occurrences whose first ofReal-factor matches that hypothesis's argument; the LHS
+   merge (`0 ≤ 1+‖x‖`) must come LAST. After the merges, the real inequality needs
+   `rw [← mul_assoc]` (the RHS is right-nested; forward `mul_assoc` fails) and then
+   `mul_le_mul_of_nonneg_right hle hfxnn`. The outer chain must mirror the original
+   theorem: `refine lt_of_le_of_lt (MeasureTheory.lintegral_mono hinner) ?_` with
+   `hinner` as a NAMED ∀-term (the two-bullet `le_trans` version leaves
+   `lt_of_le_of_lt`'s middle argument an unsolved metavariable at elaboration time),
+   then one const-pull bullet with the meas hypothesis as a flat-lambda `have hpullmeas`
+   (inline `.mul` meas-args elaborate to non-beta-reduced product-of-lambdas and the
+   rewrite fails to match).
+2. `measurable_gaussSmoothed`: `fun_prop` for the joint needs the
+   `Measurable (mollifier …)` hypothesis in context (`have hψmeas := measurable_mollifier …`);
+   the result via `(hGxmeas.stronglyMeasurable.integral_prod_right').measurable`.
+3. `smoothedPriorSeq`: `fun K => gaussSmoothed … (1/(K+1))` — use the shape
+   `(1:ℝ)/((K:ℝ) + 1)` everywhere (matches `tendsto_one_div_add_atTop_nhds_zero_nat`);
+   `0 <` by `div_pos one_pos (by positivity)`.
+4. `integrable_weighted_abs_diff_gaussSmoothed`:
+   `Integrable ((1+‖x‖) · |f − gaussSmoothed|)` by `mono'` against
+   `(1+‖x‖)·f + (1+‖x‖)·gaussSmoothed`. Key: the second dominating piece is the
+   `x`-marginal of the ψ-first joint —
+   `(integrable_joint_smooth_prior …).integral_prod_right` gives exactly
+   `∫ u, ψ(u)·((1+‖x‖)·f(x−u)) du` integrable, and the pointwise bridge
+   `(1+‖x‖)·gaussSmoothed x = ∫ u, ψ(u)·((1+‖x‖)·f(x−u)) du` needs NO slice
+   integrability because `MeasureTheory.integral_const_mul` is UNCONDITIONAL for
+   RCLike (`∫ r·f = r·∫f`, no hypothesis); the congr is a typed `have hsplit`
+   closed by `exact integral_congr_ae` (NEVER `rw [integral_congr_ae …]` — the
+   rewrite's RHS-function stays a metavar and the inner `by ring` fails);
+   `Integrable.mono'`'s bound is `‖f x‖ ≤ g x` (RHS UN-normed); `Measurable.abs`
+   does not exist in this Mathlib — let `fun_prop` build the abs-measurability
+   (it needs `Measurable (gaussSmoothed …)` in context).
+5. `hw_smoothedPriorSeq`: the ∫⁻-form `hw` — apply `weighted_smoothing_tendsto_seq`
+   along `σ K = 1/(K+1)` (`hσ0 := tendsto_one_div_add_atTop_nhds_zero_nat`), then per-K
+   `ofReal_integral_eq_lintegral_ofReal (hKint K) (hwnn K)` bridges `ofReal (∫ w K) =
+   ∫⁻ ofReal (w K)`, and the ε-threshold comes from
+   `Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hconv ε hε)` + `Real.dist_eq` +
+   `abs_of_nonneg (∫ w K ≥ 0)`; close with `(ENNReal.ofReal_lt_ofReal_iff hε).mpr`
+   (there is NO unconditional `ENNReal.ofReal_lt_ofReal` — only the
+   `ofReal_lt_ofReal_iff (h : 0 < q)` iff-forms).
+6. `cme_uniform_balls_smoothed_prior`: `cme_uniform_balls_R m n S hS A f hpdf hfmom
+   (smoothedPriorSeq n f C hC) (fun K => isPdf_gaussSmoothed … (1/(K+1)) …)
+   (hw_smoothedPriorSeq …) r hr` — the `IsPdf`-sequence and `hw` arguments typecheck
+   against the `smoothedPriorSeq`-forms by delta + proof irrelevance.
+7. `AxiomCheck.lean` extended to 12 audits — all depend only on
+   `[propext, Classical.choice, Quot.sound]`. Full build green (3227 jobs), zero `sorry`.
 
 **Status (current session):** the mollifier infrastructure is implemented and verified in
 `ApproximationByGMM.lean`:

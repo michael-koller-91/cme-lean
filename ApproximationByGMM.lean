@@ -2145,6 +2145,201 @@ public theorem integrable_joint_second (n : ℕ) (f : EuclideanSpace ℝ (Fin n)
     simp only [Prod.swap, Real.norm_eq_abs, abs_mul]
     ring
 
+/-- **Weighted integrability of the smoothed prior**: the joint function
+`(u, x) ↦ ψ_σ(u) · (1 + ‖x‖) · f (x − u)` is integrable on the product, via the
+∫⁻ Tonelli bound: `w(x) ≤ (1 + ‖u‖) (1 + ‖x − u‖)`, the `x − u`-shift, and the
+mollifier's first moment `∫⁻ ψ_σ(u) (1 + ‖u‖) = 1 + ofReal (σ · M_φ)`. -/
+public theorem integrable_joint_smooth_prior (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
+    MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
+        EuclideanSpace ℝ (Fin n) => mollifier n C hC s hs p.1 * ((1 + ‖p.2‖) *
+          f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ)))))
+        (volume.prod volume) := by
+  classical
+  have hψmeas := measurable_mollifier n C hC s hs
+  have hf0 : 0 ≤ f := hpdf.1
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  have hfm : Measurable f := hf.measurable
+  have hwnonneg : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ (1 + ‖x‖) * f x := fun x =>
+    mul_nonneg (add_nonneg zero_le_one (norm_nonneg x)) (hf0 x)
+  have heqw : (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+      = fun x : EuclideanSpace ℝ (Fin n) => f x + ‖x‖ * f x := by
+    funext x; ring
+  have hwfint : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+      volume := by
+    rw [heqw]; exact hfi.add hfmom
+  have hwnn : 0 ≤ᵐ[volume] (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x) :=
+    Filter.Eventually.of_forall hwnonneg
+  have hmass : ∫ x : EuclideanSpace ℝ (Fin n), (1 + ‖x‖) * f x ∂volume
+      = 1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume := by
+    rw [heqw, MeasureTheory.integral_add hfi hfmom, hpdf.2]
+  -- the ∫⁻ marginal identity of the weighted `f`
+  have hMoval : ∫⁻ y : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal (1 + ‖y‖) * ‖f y‖ₑ ∂volume
+    = 1 + ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) := by
+    have hflint : ∫⁻ y : EuclideanSpace ℝ (Fin n), ‖f y‖ₑ ∂volume = 1 := by
+      rw [lintegral_congr_ae (Filter.Eventually.of_forall fun y =>
+          Real.enorm_eq_ofReal (hf0 y)),
+        ← MeasureTheory.ofReal_integral_eq_lintegral_ofReal hfi
+          (Filter.Eventually.of_forall hf0), hpdf.2, ENNReal.ofReal_one]
+    have hMoe : ∫⁻ y : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ‖y‖ * ‖f y‖ₑ ∂volume
+        = ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) := by
+      rw [lintegral_congr_ae (Filter.Eventually.of_forall fun y => by
+        rw [Real.enorm_eq_ofReal (hf0 y), ← ENNReal.ofReal_mul (norm_nonneg y)]),
+        ← MeasureTheory.ofReal_integral_eq_lintegral_ofReal hfmom
+          (Filter.Eventually.of_forall fun y => mul_nonneg (norm_nonneg y) (hf0 y))]
+    have hpt2 : ∀ y : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal (1 + ‖y‖) * ‖f y‖ₑ = ‖f y‖ₑ + ENNReal.ofReal ‖y‖ * ‖f y‖ₑ := by
+      intro y
+      rw [ENNReal.ofReal_add (by norm_num) (norm_nonneg y), add_mul,
+        ENNReal.ofReal_one, one_mul]
+    rw [lintegral_congr_ae (Filter.Eventually.of_forall hpt2),
+      lintegral_add_left hfm.enorm _, hflint, hMoe]
+  -- the mollifier's first moment
+  have hψmea : ∫⁻ a : EuclideanSpace ℝ (Fin n),
+      ENNReal.ofReal (mollifier n C hC s hs a) * ENNReal.ofReal (1 + ‖a‖) ∂volume
+    = 1 + ENNReal.ofReal (s * ∫ v : EuclideanSpace ℝ (Fin n),
+        ‖v‖ * multivariateGaussianPDF n 0 C hC v ∂volume) := by
+    have hψea : Measurable (fun a : EuclideanSpace ℝ (Fin n) =>
+        ENNReal.ofReal (mollifier n C hC s hs a)) :=
+      Measurable.ennreal_ofReal (by fun_prop : Measurable fun a :
+        EuclideanSpace ℝ (Fin n) => mollifier n C hC s hs a)
+    have hpt4 : ∀ a : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal (mollifier n C hC s hs a) * ENNReal.ofReal (1 + ‖a‖)
+        = ENNReal.ofReal (mollifier n C hC s hs a)
+          + ENNReal.ofReal (mollifier n C hC s hs a) * ENNReal.ofReal ‖a‖ := by
+      intro a
+      rw [ENNReal.ofReal_add (by norm_num) (norm_nonneg a), mul_add,
+        ENNReal.ofReal_one, mul_one]
+    rw [lintegral_congr_ae (Filter.Eventually.of_forall hpt4),
+      lintegral_add_left hψea _,
+      lintegral_mollifier n C hC s hs, lintegral_mollifier_mul_norm n C hC s hs]
+  -- the ∫⁻ Tonelli bound for the ψ-first joint function
+  have hΦmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+      mollifier n C hC s hs p.1 * ((1 + ‖p.2‖) *
+        f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ))))) := by
+    fun_prop
+  have hKnn : ∀ p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+      0 ≤ mollifier n C hC s hs p.1 * ((1 + ‖p.2‖) *
+        f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ)))) := fun p =>
+    mul_nonneg (mollifier_nonneg n C hC s hs p.1)
+      (mul_nonneg (by linarith [norm_nonneg p.2]) (hf0 _))
+  refine ⟨hΦmeas.aestronglyMeasurable, ?_⟩
+  rw [MeasureTheory.hasFiniteIntegral_iff_ofReal (Filter.Eventually.of_forall hKnn)]
+  have hofnn : ∀ x : ℝ, 0 ≤ x → 0 ≤ ENNReal.ofReal x := fun x hx =>
+    le_trans (by norm_num : (0:ENNReal) ≤ ENNReal.ofReal 0) (ENNReal.ofReal_le_ofReal hx)
+  have hψe : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (mollifier n C hC s hs p.1)) :=
+    Measurable.ennreal_ofReal (by fun_prop : Measurable fun p :
+      EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) => mollifier n C hC s hs p.1)
+  have hinner : ∀ u : EuclideanSpace ℝ (Fin n),
+      ∫⁻ x : EuclideanSpace ℝ (Fin n),
+          ENNReal.ofReal (mollifier n C hC s hs u * ((1 + ‖x‖) *
+            f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))) ∂volume
+        ≤ (1 + ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume)) *
+          (ENNReal.ofReal (mollifier n C hC s hs u) * ENNReal.ofReal (1 + ‖u‖)) := by
+    intro u
+    have hu : 0 ≤ (1:ℝ) + ‖u‖ := by linarith [norm_nonneg u]
+    have hpsi : 0 ≤ mollifier n C hC s hs u := mollifier_nonneg n C hC s hs u
+    have hxmeas : Measurable (fun x : EuclideanSpace ℝ (Fin n) =>
+        ENNReal.ofReal (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖) *
+          ‖f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))‖ₑ) :=
+      (Measurable.ennreal_ofReal (by fun_prop : Measurable fun x :
+        EuclideanSpace ℝ (Fin n) => (1:ℝ) +
+          ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖)).mul
+        (hfm.enorm.comp (by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+          WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))
+    refine le_trans (MeasureTheory.lintegral_mono
+      (f := fun (x : EuclideanSpace ℝ (Fin n)) =>
+        ENNReal.ofReal (mollifier n C hC s hs u * ((1 + ‖x‖) *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))))
+      (g := fun (x : EuclideanSpace ℝ (Fin n)) =>
+        ENNReal.ofReal (mollifier n C hC s hs u) *
+          (ENNReal.ofReal (1 + ‖u‖) * (ENNReal.ofReal (1 +
+            ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖) *
+            ‖f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))‖ₑ)))
+      (fun x => ?_)) ?_
+    · -- pointwise
+      have hba : WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)) = x - u := rfl
+      have htri : ‖x‖ ≤ ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖ + ‖u‖ := by
+        rw [hba]
+        calc ‖x‖ = ‖(x - u) + u‖ := by rw [sub_add_cancel]
+          _ ≤ ‖x - u‖ + ‖u‖ := norm_add_le (x - u) u
+      have hle : (1:ℝ) + ‖x‖
+          ≤ (1 + ‖u‖) * (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖) := by
+        have hexp : (1 + ‖u‖) *
+              (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖)
+            = 1 + ‖u‖ + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖
+              + ‖u‖ * ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖ := by ring
+        rw [hexp]
+        linarith [htri, norm_nonneg u,
+          mul_nonneg (norm_nonneg u)
+            (norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))]
+      have hfxnn : 0 ≤ f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) := hf0 _
+      have hwnx : 0 ≤ (1:ℝ) + ‖x‖ := by linarith [norm_nonneg x]
+      have hkey : ENNReal.ofReal ((1:ℝ) + ‖x‖) *
+          ENNReal.ofReal (f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))
+        ≤ ENNReal.ofReal (1 + ‖u‖) *
+          (ENNReal.ofReal (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖) *
+            ENNReal.ofReal (f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))))) := by
+        rw [← ENNReal.ofReal_mul (by linarith [norm_nonneg (WithLp.toLp 2 ((x : Fin n → ℝ) -
+            (u : Fin n → ℝ)))]: 0 ≤ (1:ℝ) + ‖WithLp.toLp 2 ((x : Fin n → ℝ) -
+            (u : Fin n → ℝ))‖),
+          ← ENNReal.ofReal_mul (by linarith [norm_nonneg u] : 0 ≤ (1:ℝ) + ‖u‖),
+          ← ENNReal.ofReal_mul hwnx]
+        refine ENNReal.ofReal_le_ofReal ?_
+        rw [← mul_assoc]
+        exact mul_le_mul_of_nonneg_right hle hfxnn
+      simp only []
+      have hsplit : ENNReal.ofReal (mollifier n C hC s hs u *
+          ((1 + ‖x‖) * f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))))
+        = ENNReal.ofReal (mollifier n C hC s hs u) *
+          ENNReal.ofReal ((1 + ‖x‖) * f (WithLp.toLp 2 ((x : Fin n → ℝ) -
+            (u : Fin n → ℝ)))) := ENNReal.ofReal_mul hpsi
+      rw [hsplit, ENNReal.ofReal_mul (by linarith [norm_nonneg x] : 0 ≤ (1:ℝ) + ‖x‖),
+        Real.enorm_eq_ofReal hfxnn]
+      exact mul_le_mul_of_nonneg_left hkey (hofnn _ hpsi)
+    · -- the two const-pulls and the `x − u`-shift
+      have hxfn : Measurable (fun x : EuclideanSpace ℝ (Fin n) =>
+          ENNReal.ofReal (1 + ‖u‖) *
+            (ENNReal.ofReal (1 + ‖WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))‖) *
+              ‖f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))‖ₑ)) :=
+        (Measurable.ennreal_ofReal (by fun_prop : Measurable fun x :
+          EuclideanSpace ℝ (Fin n) => (1:ℝ) + ‖u‖)).mul hxmeas
+      rw [MeasureTheory.lintegral_const_mul (ENNReal.ofReal (mollifier n C hC s hs u)) hxfn,
+        MeasureTheory.lintegral_const_mul (ENNReal.ofReal (1 + ‖u‖)) hxmeas,
+        lintegral_shift_neg n (u : Fin n → ℝ)
+          (fun z : EuclideanSpace ℝ (Fin n) =>
+            ENNReal.ofReal (1 + ‖z‖) * ‖f z‖ₑ)
+          ((Measurable.ennreal_ofReal (by fun_prop : Measurable fun z :
+            EuclideanSpace ℝ (Fin n) => (1:ℝ) + ‖z‖)).mul hfm.enorm),
+        hMoval]
+      have hring : ENNReal.ofReal (mollifier n C hC s hs u) *
+          (ENNReal.ofReal (1 + ‖u‖) *
+            (1 + ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume)))
+        = (1 + ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume)) *
+          (ENNReal.ofReal (mollifier n C hC s hs u) * ENNReal.ofReal (1 + ‖u‖)) := by
+        ring
+      exact le_of_eq hring
+  rw [MeasureTheory.lintegral_prod
+    (f := fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (mollifier n C hC s hs p.1 * ((1 + ‖p.2‖) *
+        f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ)))))
+      ) ((Measurable.ennreal_ofReal hΦmeas).aemeasurable)]
+  refine lt_of_le_of_lt (MeasureTheory.lintegral_mono hinner) ?_
+  have hpullmeas : Measurable (fun a : EuclideanSpace ℝ (Fin n) =>
+      ENNReal.ofReal (mollifier n C hC s hs a) * ENNReal.ofReal (1 + ‖a‖)) :=
+    (Measurable.ennreal_ofReal hψmeas).mul
+      (Measurable.ennreal_ofReal (by fun_prop : Measurable fun a :
+        EuclideanSpace ℝ (Fin n) => (1:ℝ) + ‖a‖))
+  rw [MeasureTheory.lintegral_const_mul
+    (1 + ENNReal.ofReal (∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume))
+    hpullmeas, hψmea]
+  exact ENNReal.mul_lt_top ((ENNReal.add_lt_top).mpr ⟨ENNReal.one_lt_top, by simp⟩)
+    ((ENNReal.add_lt_top).mpr ⟨ENNReal.one_lt_top, by simp⟩)
+
 set_option maxHeartbeats 4000000 in
 /-- **Smoothing theorem**: for a continuous pdf `f` with finite first moment, the weighted L¹
 distance between `f` and its Gaussian smoothing tends to `0` along every positive sequence
@@ -2789,3 +2984,150 @@ public theorem weighted_smoothing_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ 
       (abs_nonneg _)
   rw [dist_zero_right, Real.norm_eq_abs, abs_of_nonneg h0]
   exact lt_of_le_of_lt (hchain (σ k) (hσ k)) hNk
+
+/-! ### The smoothed-prior sequence satisfies the `hw` hypothesis -/
+
+/-- Measurability of the Gaussian-smoothed prior: the `x`-marginal integral of the
+joint `(x, u) ↦ ψ_σ(u) · f (x − u)`. -/
+public theorem measurable_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hf : Continuous f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
+    Measurable (gaussSmoothed n f C hC σ hσ) := by
+  have hψmeas : Measurable (mollifier n C hC σ hσ) := measurable_mollifier n C hC σ hσ
+  have hGxmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+      mollifier n C hC σ hσ p.2 *
+        f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ)))) := by
+    fun_prop
+  exact (hGxmeas.stronglyMeasurable.integral_prod_right').measurable
+
+/-- The smoothed-prior sequence: `K ↦ gaussSmoothed … (1/(K+1))`, with `1/(K+1) → 0`. -/
+public noncomputable def smoothedPriorSeq (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) :
+    ℕ → EuclideanSpace ℝ (Fin n) → ℝ :=
+  fun K => gaussSmoothed n f C hC ((1:ℝ)/((K:ℝ) + 1)) (by positivity)
+
+/-- **Weighted integrability of the smoothed-prior gap**: `(1 + ‖x‖) · |f x − gaussSmoothed x|`
+is integrable, by domination with `(1 + ‖x‖) · f x + ∫ ψ_σ(u) · (1 + ‖x‖) · f (x − u) du`
+(the second piece is the `x`-marginal of the ψ-first joint function). -/
+public theorem integrable_weighted_abs_diff_gaussSmoothed (n : ℕ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : Continuous f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
+    MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|) volume := by
+  classical
+  have hf0 : 0 ≤ f := hpdf.1
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  have hψmeas : Measurable (mollifier n C hC s hs) := measurable_mollifier n C hC s hs
+  have hgsmm : Measurable (gaussSmoothed n f C hC s hs) :=
+    measurable_gaussSmoothed n f hf C hC s hs
+  have hx : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ (1:ℝ) + ‖x‖ := fun x =>
+    by linarith [norm_nonneg x]
+  have hgsmpos : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ gaussSmoothed n f C hC s hs x := fun x =>
+    MeasureTheory.integral_nonneg fun u =>
+      mul_nonneg (mollifier_nonneg n C hC s hs u) (hf0 _)
+  -- piece 1: `(1 + ‖x‖) · f x`
+  have hg1 : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * f x) volume := by
+    have heq : (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
+      = fun x : EuclideanSpace ℝ (Fin n) => f x + ‖x‖ * f x := by
+      funext x; ring
+    rw [heq]; exact hfi.add hfmom
+  -- piece 2: `(1 + ‖x‖) · gaussSmoothed x`, via the ψ-first joint's `x`-marginal
+  have hg2 : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * gaussSmoothed n f C hC s hs x) volume := by
+    refine MeasureTheory.Integrable.mono'
+      ((integrable_joint_smooth_prior n f hf hpdf hfmom C hC s hs).integral_prod_right) ?_ ?_
+    · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 + ‖x‖) * gaussSmoothed n f C hC s hs x)).aestronglyMeasurable
+    · filter_upwards with x
+      show ‖(1 + ‖x‖) * gaussSmoothed n f C hC s hs x‖
+        ≤ ∫ u : EuclideanSpace ℝ (Fin n), mollifier n C hC s hs u * ((1 + ‖x‖) *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))) ∂volume
+      have hsplit : ∫ u : EuclideanSpace ℝ (Fin n), mollifier n C hC s hs u * ((1 + ‖x‖) *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))) ∂volume
+        = ∫ u : EuclideanSpace ℝ (Fin n), (1 + ‖x‖) * (mollifier n C hC s hs u *
+          f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)))) ∂volume :=
+        MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun u => by ring)
+      rw [Real.norm_eq_abs, abs_mul, abs_of_nonneg (hx x), abs_of_nonneg (hgsmpos x),
+        hsplit, MeasureTheory.integral_const_mul (1 + ‖x‖)]
+      exact mul_le_mul_of_nonneg_left (le_refl _) (hx x)
+  -- the domination
+  refine MeasureTheory.Integrable.mono' (hg1.add hg2) ?_ ?_
+  · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|)).aestronglyMeasurable
+  · filter_upwards with x
+    show ‖(1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|‖
+      ≤ (1 + ‖x‖) * f x + (1 + ‖x‖) * gaussSmoothed n f C hC s hs x
+    rw [Real.norm_eq_abs, abs_mul, abs_abs, abs_of_nonneg (hx x)]
+    calc (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|
+        ≤ (1 + ‖x‖) * (|f x| + |gaussSmoothed n f C hC s hs x|) :=
+          mul_le_mul_of_nonneg_left (abs_sub _ _) (hx x)
+      _ = (1 + ‖x‖) * (f x + gaussSmoothed n f C hC s hs x) := by
+          rw [abs_of_nonneg (hf0 x), abs_of_nonneg (hgsmpos x)]
+      _ = (1 + ‖x‖) * f x + (1 + ‖x‖) * gaussSmoothed n f C hC s hs x := by
+          rw [mul_add]
+
+/-- **The `hw` hypothesis for the smoothed-prior sequence**: the ∫⁻ form of the weighted-L¹
+convergence `∫ (1 + ‖x‖) |f x − gaussSmoothed … (1/(K+1)) x| → 0` along `K → ∞`. -/
+public theorem hw_smoothedPriorSeq (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) :
+    ∀ ε > 0,
+      ∃ K₀ : ℕ,
+        ∀ K ≥ K₀,
+          ∫⁻ h : EuclideanSpace ℝ (Fin n),
+              ENNReal.ofReal ((1 + ‖h‖) *
+                |f h - smoothedPriorSeq n f C hC K h|) ∂volume
+            < ENNReal.ofReal ε := by
+  intro ε hε
+  classical
+  have hσpos : ∀ K : ℕ, 0 < (1:ℝ)/((K:ℝ) + 1) := fun K =>
+    div_pos one_pos (by positivity)
+  have hσ0 : Filter.Tendsto (fun K : ℕ => (1:ℝ)/((K:ℝ) + 1)) Filter.atTop (nhds 0) :=
+    tendsto_one_div_add_atTop_nhds_zero_nat
+  have hconv := weighted_smoothing_tendsto_seq n f hf hpdf hfmom C hC
+    (fun K => (1:ℝ)/((K:ℝ) + 1)) hσpos hσ0
+  -- per-K integrability and the ∫⁻ ↔ ∫ bridge
+  have hKint : ∀ K : ℕ, MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * |f x - smoothedPriorSeq n f C hC K x|) volume := fun K =>
+    integrable_weighted_abs_diff_gaussSmoothed n f hf hpdf hfmom C hC
+      ((1:ℝ)/((K:ℝ) + 1)) (hσpos K)
+  have hwnn : ∀ K : ℕ, 0 ≤ᵐ[volume] (fun x : EuclideanSpace ℝ (Fin n) =>
+      (1 + ‖x‖) * |f x - smoothedPriorSeq n f C hC K x|) := fun K =>
+    Filter.Eventually.of_forall fun x => mul_nonneg (by linarith [norm_nonneg x]) (abs_nonneg _)
+  have hbridge : ∀ K : ℕ, ENNReal.ofReal (∫ x : EuclideanSpace ℝ (Fin n),
+      (1 + ‖x‖) * |f x - smoothedPriorSeq n f C hC K x| ∂volume)
+    = ∫⁻ h : EuclideanSpace ℝ (Fin n),
+        ENNReal.ofReal ((1 + ‖h‖) * |f h - smoothedPriorSeq n f C hC K h|) ∂volume := fun K =>
+    MeasureTheory.ofReal_integral_eq_lintegral_ofReal (hKint K) (hwnn K)
+  obtain ⟨K₀, hK₀⟩ := Filter.eventually_atTop.mp
+    (Metric.tendsto_nhds.mp hconv ε hε)
+  refine ⟨K₀, fun K hK => ?_⟩
+  have hK₀K := hK₀ K hK
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg (MeasureTheory.integral_nonneg fun x =>
+    mul_nonneg (by linarith [norm_nonneg x]) (abs_nonneg _))] at hK₀K
+  rw [← hbridge K]
+  exact (ENNReal.ofReal_lt_ofReal_iff hε).mpr hK₀K
+
+/-- **Phase 1**: the conditional mean estimates computed from the Gaussian-smoothed priors
+`smoothedPriorSeq … K` converge to the CME of the true prior `f` locally uniformly —
+uniformly on every closed ball of radius `r > 0` in `ℝ^m`, for arbitrary dimensions `m, n`
+and observation matrix `A`. This is `cme_uniform_balls_R` with the smoothed-prior sequence,
+whose `hw` hypothesis is `hw_smoothedPriorSeq`. -/
+public theorem cme_uniform_balls_smoothed_prior (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ)
+    (hS : S.PosDef) (A : Matrix (Fin m) (Fin n) ℝ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : Continuous f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (r : ℝ) (hr : 0 < r) :
+    Tendsto
+      (fun K : ℕ =>
+        ⨆ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
+          ENNReal.ofReal ‖cmeR m n S hS A f y -
+            cmeR m n S hS A (smoothedPriorSeq n f C hC K) y‖)
+      atTop (nhds 0) := by
+  have hσpos : ∀ K : ℕ, 0 < (1:ℝ)/((K:ℝ) + 1) := fun K =>
+    div_pos one_pos (by positivity)
+  exact cme_uniform_balls_R m n S hS A f hpdf hfmom (smoothedPriorSeq n f C hC)
+    (fun K => isPdf_gaussSmoothed n f hpdf hf C hC ((1:ℝ)/((K:ℝ) + 1)) (hσpos K))
+    (hw_smoothedPriorSeq n f hf hpdf hfmom C hC) r hr
