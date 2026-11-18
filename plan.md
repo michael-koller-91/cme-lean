@@ -735,3 +735,52 @@ session, so this is re-application, not design):**
 7. `Main.lean`: `multivariateGaussianPDF_le_const` was made `public` (needed by the
    mollifier-peak lemma).
 
+
+**Phase 2 Step 0 status (this session):**
+
+DONE and verified: `modulus_tendsto_integrable` (unweighted L¹ translation continuity for
+integrable `f`, no continuity needed) — via Mathlib's continuous `DomAddAct` action on
+`Lp ℝ 1 volume`: `DomAddAct.mk u +ᵥ MemLp.toLp f hmem` has coerced function a.e.
+`fun x => f (u +ᵥ x)`, and the `L¹` distance of the action translate computes to the
+unweighted translation modulus via `L1.dist_def` + `edist_dist` + the a.e. chain
+(`MemLp.coeFn_toLp`, `DomAddAct.vadd_Lp_ae_eq`,
+`hmp.quasiMeasurePreserving.ae_eq_comp`). Full build was green with it.
+
+IN PROGRESS: `weighted_modulus_tendsto_integrable` (the weighted Step 0 lemma) — the
+architecture is fully drafted in the file (core = the unweighted lemma scaled by (1+K) on
+the ball; tails = `setIntegral_tail_tendsto` at K with the threshold-shift transport via
+`integral_toLp_trans_right`; budgets ε/2 + ε/8 + ε/4). ~15 mechanical form-alignment
+errors remain, all of the `+ᵥ`/`toLp`/beta/defeq kind catalogued below, no mathematical
+obstacles.
+
+**New gotchas catalogued (Phase 2 Step 0):**
+1. `have h := e` locals do NOT unfold for `rfl`/term-level defeq checks against their own
+   definition (the `fL := MemLp.toLp f hmem` saga) — avoid `have`-bound Lp elements in
+   statement positions; write `MemLp.toLp f hmem` inline (its coercion DOES reduce
+   pointwise via `AEEqFun.coeFn_mk`-rfl-chain... empirically the +ᵥ-annotated forms
+   typecheck but the toLp-substituted ones don't when mixed).
+2. `⇑X` and `↑↑X` for Lp elements are the SAME term (`AEEqFun.cast`) — but `rw` pattern
+   matching still failed across the `.sub`-lemma's ↑↑-form vs a ⇑-goal once (cause:
+   the argument shape, not the notation).
+3. The REAL failure driver everywhere: `+ᵥ`-forms and `WithLp.toLp 2 ((x : Fin n → ℝ) +
+   (u : Fin n → ℝ))`-forms are NOT defeq (they differ by `add_comm` and `Real.instAdd` is
+   NOT exposed for unfolding in this module-Mathlib). Bridge them ONLY propositionally,
+   via `vadd_toLp_add x u` (proven: ofLp-injective + ofLp_add + add_comm + add_sub_cancel).
+   ⇒ RULE: keep each proof internally in ONE form; the `DomAddAct` action proofs in the
+   `+ᵥ`-form (they match `vadd_Lp_ae_eq`, `mk_vadd_toLp`); the ∫-statement forms in the
+   `toLp`-idiom form; connect by `Tendsto.congr'`/`integral_congr_ae` pointwise bridges.
+4. `memLp_one_iff_integrable.mp hSR` gives `Integrable` of hSR's PLAIN function
+   (`f ∘ (u +ᵥ ·)`, the ∘-form, beta-equal to the flat `fun x => f (u +ᵥ x)`) — NO
+   `MemLp.coeFn_toLp` is needed for `Integrable.congr`; the coe is needed only for the
+   pointwise a.e. identification of the coerced values.
+5. `add_sub_cancel` in this Mathlib is `a + (b - a) = b` (pattern `?a + (?b - ?a)`);
+   for `(a + b) - b = a` use `add_sub_cancel_right`.
+6. `Continuous.isClosed_preimage` does not exist; get MeasurableSet of `{y | ‖y‖ ≤ K}` via
+   `A = Bᶜ` (ext + `not_lt`) + `hBmeas.compl`.
+7. `(K - 1 : ℕ) : ℝ` vs `↑K - 1` cast mismatch: use `K₁` directly (K := K₁ + 1) instead
+   of `K - 1`.
+8. In this module-Mathlib, `Real.instAdd` etc. are NOT exposed for `whnf` defeq unfolding:
+   any defeq check that must look inside a real sum FAILS. All Real-arithmetic identities
+   must be propositional (`ring`/`linarith` with `hexp`-style rewrites).
+9. abs-indicator integrand statements: count parens by generating the line from the
+   verified `hWint` statement template (y-substituted), never by hand.
