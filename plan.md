@@ -1,6 +1,31 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phase 0 implemented and verified (see below); Phases 1–2 are planning documents.
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Step 0 is implemented
+and verified (`modulus_tendsto_integrable` + `weighted_modulus_tendsto_integrable`,
+public and axiom-audited; full build green, zero `sorry`); Steps 1–7 of Phase 2 are
+planning documents.
+
+**Correction round (latest session, after the Step-0 build).** A review pass found and
+fixed real mathematical defects in this document (the code was unaffected — Step 0 was
+finished to match the corrected mathematics):
+
+1. Proof-strategy §2's quantization display went straight from the Jensen/Tonelli bound
+   to `sup_s ∫ w(x)|φ_σ(x+s) − φ_σ(x)|dx`, **silently dropping the weight shift** `w(y+t)`
+   created by the substitution `y = x − t`; its "only `δ/σ → 0` is needed" claim also
+   omitted the requirement `σ → 0`, and it leaned on per-σ continuity of translation
+   which is *not uniform in σ* along the diagonal (the Phase 2 design decisions already
+   say so).
+2. Phase 2 Step 3's displayed first term had the same weight-shift defect. Keeping the
+   resulting `‖t‖·L₁` term — bounded by the **R-free** `M_f = ∫ ‖t‖ f`, not by
+   `sup_{t∈B_R} ‖t‖ ≤ R√n` — is what keeps the `R_K → ∞` diagonal valid.
+3. The ε/3 (§2) vs ε/2 (Step 6) budget wording was reconciled (both are valid; they
+   correspond to different term splittings).
+4. Step 0's statement/architecture text was rewritten to the proven form: `f(x+u)` sign
+   (the (T)-lemma uses `f(x−u)`; equivalent by `u ↦ −u`), integer thresholds `K`/`K−1`
+   (the tail lemma is stated at natural `k`, with `‖u‖ < 1`), core via
+   `modulus_tendsto_integrable` scaled by `(1+K)`, budgets `ε/2 + ε/8 + ε/4`.
+5. Stale statuses (header, Phase 2 header, deliverables, Step 0 status block) and
+   gotcha 7 were updated; the final-round tactic gotchas are appended at the end.
 
 ## Goal
 
@@ -139,22 +164,50 @@ continuity or decay of `f` is used.
    `∫ ‖x‖ (f ⋆ φ_σ) ≤ ∫ ‖x‖ f + ∫ ‖y‖ φ_σ(y) dy =: ∫ ‖x‖ f + c σ`
    (subadditivity of the first moment under convolution).
 
-2. **Quantization (lattice cells).** For lattice spacing `δ ≪ σ`, define the rounding
-   map `Q_δ(t) = δ ⌊t/δ⌋` (componentwise; a measurable, piecewise-constant map with
-   `‖Q_δ(t) − t‖ ≤ δ√n`). Let the cells be the finitely many fibers of `Q_δ` inside a
-   large box, with centers `x_j = Q_δ(x_j)` and weights `w_j = ∫_{cell j} f`. Define
-   `f_K(x) = ∑_j w_j φ_σ(x − x_j)` — a **finite** mixture (sum over lattice points in
-   the box), and an integral identity
-   `f_K(x) = ∫ f(t) φ_σ(x − Q_δ(t)) dt` holds (finite sum ↔ integral interchange).
-   Then
+2. **Quantization (lattice cells).** For lattice spacing `δ ≪ σ`, define the index map
+   `latticeIdx δ(t) = ⌊t/δ⌋` (`Fin n → ℤ`, componentwise) and the rounding map
+   `Q_δ(t) = δ • ⌊t/δ⌋` (componentwise; a measurable, piecewise-constant map with
+   `‖Q_δ(t) − t‖ ≤ δ√n`). For an integer box half-width `N = ⌈R/δ⌉₊`, let
+   `S(N) := Fintype.piFinset (fun _ : Fin n => Finset.Ico (-(N : ℤ)) (N : ℤ))` be the
+   `Finset` of integer grid vectors in `[-N, N)^n`, with cells
+   `cell(δ, k) = {t | latticeIdx δ t = k}`, centers `x_k = δ • k`, and weights
+   `W_k = ∫_{cell(δ, k)} f`. Define the covered box as the disjoint union
+   `box(δ, N) := ⋃_{k ∈ S(N)} cell(δ, k) = [-Nδ, Nδ)^n ⊇ [-R, R]^n`
+   (defining the box as the union of the `Ico` cells avoids upper-boundary `t_i = R`
+   off-by-one issues and makes pairwise disjointness and `integral_biUnion_finset`
+   immediate). Define
+   `f_K(x) = ∑_{k ∈ S(N)} W_k φ_σ(x − x_k) + (1 − c) φ_σ(x)` where `c = ∫_{box} f` — a
+   **finite** mixture, and an integral identity
+   `∑_{k ∈ S(N)} W_k φ_σ(x − x_k) = ∫_{box} f(t) φ_σ(x − Q_δ(t)) dt` holds
+   (finite sum ↔ integral interchange via `integral_biUnion_finset`).
+   Then, writing `s(t) := t − Q_δ(t)` (`‖s(t)‖ ≤ δ√n`) and substituting `y = x − t`
+   in the inner integral on `box`,
    `‖f_K − f ⋆ φ_σ‖_{L¹(w)}
-      ≤ ∫ f(t) · ∫ w(x) |φ_σ(x − Q_δ(t)) − φ_σ(x − t)| dx dt
-      ≤ sup_{‖s‖ ≤ δ√n} ∫ w(x) |φ_σ(x + s) − φ_σ(x)| dx`,
-   which → 0 as `δ → 0` by **continuity of translation in weighted L¹ for the fixed
-   kernel** (legitimate: `∫ w φ_σ < ∞` since Gaussians have finite moments of all
-   orders). Note the kernel bandwidth `σ` and the cell size `δ` play *independent*
-   roles: only `δ/σ → 0` is needed; no bandwidth–cell-size matching (that is only
-   needed for sup-norm approximation, which we do not attempt).
+      ≤ ∫_{box} f(t) · ∫ w(x) |φ_σ(x − Q_δ(t)) − φ_σ(x − t)| dx dt
+        + (1 − c) ∫ w(x) φ_σ(x) dx + ∫_{box^c} f(t) ∫ w(x) φ_σ(x − t) dx dt
+      ≤ ∫_{box} f(t) · [ weightedModulus n φ_σ (Q_δ t − t) + ‖t‖ · L₁(s(t)/σ) ] dt
+        + (1 + σM₁) · [ (1 − c) + ∫_{box^c} w f ]`,
+   where `weightedModulus n g u := ∫ w(x) |g(x − u) − g x| dx` (the code's definition;
+   `weightedModulus n φ_σ (Q_δ t − t) = ∫ w(y) |φ_σ(y+s(t)) − φ_σ(y)| dy`) and
+   `L₁(v) := ∫ |φ_1(y+v) − φ_1(y)| dy ≤ weightedModulus n φ_1 (−v)`; the steps use
+   `w(y+t) ≤ w(y) + ‖t‖`, `∫ |φ_σ(y+s) − φ_σ(y)| dy = L₁(s/σ)` and the evenness of `φ_σ`.
+   **[corrected — the previous display jumped straight to
+   `sup_{‖s‖ ≤ δ√n} ∫ w(x) |φ_σ(x + s) − φ_σ(x)| dx`, dropping the weight shift
+   `w(y+t) → w(y)`; and the loss term must NOT be bounded by pulling `‖t‖ ≤ R√n` out
+   (an `R`-dependent factor would destroy the `R_K → ∞` diagonal) — integrated against
+   `f` it is `∫_{box} ‖t‖ f(t) dt ≤ M_f := ∫ ‖t‖ f`, independent of `R`. Moreover, in Lean
+   we avoid `sSup` over uncountable balls altogether by unpacking `Metric.tendsto_nhds`
+   on `weightedModulus n φ_1` to get a uniform pointwise `< η` bound whenever
+   `δ√n/σ < r`.]**
+   Both terms → 0 as `σ → 0` and `δ/σ → 0` by the **scaled-modulus** estimate of
+   Phase 2 Step 3 (`weightedModulus_gaussian_scale`). Continuity of translation in
+   weighted L¹ for a *fixed* kernel is legitimate for each fixed `σ`
+   (`∫ w φ_σ < ∞`, Gaussians have moments of all orders) but is **not uniform in `σ`**,
+   so it cannot be used along the diagonal — the point made in the Phase 2 design
+   decisions. Note the kernel bandwidth `σ` and the cell size `δ` play *independent*
+   roles: both `σ → 0` and `δ/σ → 0` are required (along the diagonal
+   `δ_K/σ_K = σ_K`, so a single condition); no further bandwidth–cell-size matching
+   (that is only needed for sup-norm approximation, which we do not attempt).
 
 3. **Mixtures are pdfs.** `∫ f_K = ∑_j w_j = ∫_{box} f =: c`, which is `< 1` in
    general — so the literal `f_K` is NOT a pdf. Fix (settled design decision, see the
@@ -169,7 +222,10 @@ continuity or decay of `f` is used.
    cells and Gaussian leakage `m_σ = ∫ ‖y‖ φ_σ(y) dy`, both controlled by the choice
    ordering: pick `R` (tail of `f`), then `σ` (smoothing + leakage), then `δ ≪ σ`
    (translation continuity), then let `K → ∞` along a diagonal enumeration of the
-   triples `(R, σ, δ)`. Every error term is `< ε/3`; assembly gives (3).
+   triples `(R, σ, δ)`. Every error term is `< ε/3` in this three-piece sketch
+   (smoothing / quantization / tails); the execution-level assembly of Phase 2 Step 6
+   folds the tails into the quantization budget and uses a two-term triangle with
+   `< ε/2` per term.
 
 5. **Assembly.** Combine 1–4 into the target theorem, then compose with
    `cme_uniform_balls_R` for the CME corollary.
@@ -485,7 +541,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Step 0 DONE; Steps 1–7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -519,123 +575,268 @@ strategy = the "Proof strategy" section above; this is the formalization-level p
   computation.)
 
 **Step 0 — weighted translation continuity for INTEGRABLE `f`
-(`weighted_modulus_tendsto_integrable`).** `G_f(u) := ∫ (1+‖x‖)·|f x − f (x−u)| dx → 0`
-as `u → 0` for `f ≥ 0` integrable with finite first moment — the (T)-lemma WITHOUT
-continuity; the one genuinely new analytic input. Core/tail architecture (Phase 1's
-(T)-lemma with the core replaced by Mathlib's L¹ translation continuity):
-* core: `∫_{‖x‖ ≤ R} |f x − f(x−u)| dx → 0` via the route identified in the Mathlib
-  note (`Lp.instContinuousSMulDomMulAct`, Haar-measured finite-dim spaces — verify the
-  exact lemma name/statement for `EuclideanSpace ℝ (Fin n)` + `volume` before
-  committing; watch the `(−u) • f` sign convention vs. `f (x−u)`);
-* tail: `setIntegral_tail_tendsto` for `(1+‖x‖)·f` + the translate-tail transport
-  (Phase 1's threshold-shift trick: move the indicator INTO the transported function;
-  `∫_{‖x‖>R}(1+‖x‖)|f(x−u)| ≤ (1+‖u‖)·tail(R−‖u‖)` via the `htri`-style
-  `‖x‖ ≤ ‖x−u‖+‖u‖` bound);
-* assembly: both `Filter.Tendsto G_f (𝓝 0) (𝓝 0)` (pointwise-in-`u` input for the DCTs)
-  and the ε-δ form. The unweighted corollary `∫|f x − f(x−u)| → 0` follows by
-  domination (`1 ≤ w`); the weighted form is needed for Step 1, the unweighted for
-  nothing (Step 3 uses the (T)-lemma at `φ_1`, see below).
+(`weighted_modulus_tendsto_integrable`) — DONE (public, axiom-audited).**
+As implemented: for `f ≥ 0` integrable with finite first moment,
+`Filter.Tendsto (fun u => ∫ x, (1 + ‖x‖) * |f x − f (x + u)| ∂volume) (nhds 0) (nhds 0)`
+— the `f(x+u)` sign; the `f(x−u)` form of the earlier draft (and of the (T)-lemma
+`weighted_modulus_tendsto_seq`) is equivalent by `u ↦ −u`, and the code uses `+`
+throughout, matching the `WithLp.toLp 2 (x + u)` transport helpers. The (T)-lemma
+WITHOUT continuity; the one genuinely new analytic input. Core/tail architecture as
+implemented (the unweighted route of the risk register, not the raw `DomAddAct`
+statement sketch):
+* unweighted primitive first: `modulus_tendsto_integrable` —
+  `∫ |f x − f (x+u)| ∂volume → 0` for integrable `f` (no continuity), via Mathlib's
+  continuous `DomAddAct` action on `Lp ℝ 1 volume` (the `Lp.instContinuousSMulDomMulAct`
+  route: `DomAddAct.mk u +ᵥ MemLp.toLp f hmem` has coerced function a.e.
+  `fun x => f (u +ᵥ x)`; the `L¹` distance computes back to the unweighted modulus via
+  `L1.dist_def` + `edist_dist` + the a.e. chain);
+* core: scale to the ball — `∫_{‖x‖ ≤ K} (1+‖x‖)|diff| ≤ (1+K) · ∫ |diff|`
+  (`hcoreB`), so the core budget `ε/2` comes from the unweighted modulus at the
+  `u`-dependent threshold `ε/(2(1+K))` (`hcoreu`);
+* tail: `setIntegral_tail_tendsto` for `g = (1+‖x‖)·f` at **natural** thresholds `k`
+  (`htail : Tendsto (fun k => ∫ x in {y | ↑k < ‖y‖}, (1+‖x‖)*f x) atTop (𝓝 0)`), plus
+  the threshold-shift transport `hI2'le`: move the indicator INTO the transported
+  function (`integral_toLp_trans_right` with `c = −u`), giving
+  `∫_{‖y‖ > K} (1+‖y‖) f(y+u) ≤ (1+‖u‖) · ∫_{‖z‖ > K−1} (1+‖z‖) f(z)` — the real
+  threshold `K − ‖u‖` of the sketch is rounded down to the integer `K − 1` because the
+  tail lemma is stated at natural `k` (valid since `‖u‖ < 1`), and the `htri`-style
+  `‖z‖ ≤ ‖z−u‖ + ‖u‖` bound supplies the `(1+‖u‖)` factor; the thresholds actually used
+  are `K` and `K − 1` (`htK`, `htK1`) — never `↑K − 1` directly (gotcha 7);
+* assembly: the `Tendsto` form of the statement (the ε-δ form is recovered by
+  `Metric.tendsto_nhds`); budgets: core `ε/2`, tail `ε/8 + ε/4` (the `ε/8` threshold
+  comes from `htail`), final `ε/2 + ε/8 + ε/4 < ε`.
+  The unweighted lemma is not a corollary of the weighted one here — it is the
+  *primitive* the core is built on; the weighted form is what Step 1 consumes
+  (Step 3's `L₁` at `φ_1` follows from the (T)-lemma by domination `1 ≤ w`).
 
 **Step 1 — smoothing for general `f` (`weighted_smoothing_integrable`).**
-`∫ w·|f − f⋆φ_σ| → 0` as `σ → 0` (`f` integrable + finite first moment, NO continuity):
-* Tonelli block: `(x,y) ↦ φ_σ(y)·(1+‖x‖)·|f x − f(x−y)|` integrable on the product
-  (`∫∫ ≤ (2+‖y‖)·∫wf`-bound + `integrable_toLp_shift` — Phase 1 patterns), giving
-  `∫ w|f − f⋆φ_σ| ≤ ∫ φ_σ(y)·G_f(y) dy`;
-* σ→0 limit = the smoothing theorem's Step C pattern verbatim: transport
-  `∫ φ_σ(y)·G_f(y) dy = ∫ φ_1(z)·G_f(σz) dz` via `integral_subst` (the
-  `integral_mollifier_mul` transport), DCT against the fixed integrable dominator
-  `(2+‖z‖)·∫wf` (for `σ ≤ 1`), pointwise limit `G_f(σz) → 0` from Step 0 + `σz → 0`
-  (`tendsto_const_nhds.mul`-style composition + typed `Filter.Tendsto.congr`).
+`∫ w·|f − f⋆φ_σ| → 0` as `σ → 0` (`f` integrable + finite first moment, NO continuity).
+* **Reuse existing Phase 1 infrastructure instead of writing a new `G_f`:**
+  In `ApproximationByGMM.lean`, `weightedModulus n f u` (`= ∫ (1+‖x‖)*|f(x−u) − f x| dx`)
+  is ALREADY defined! Moreover, inspecting the proof of `weightedModulus_le`,
+  `stepA_gaussSmoothed`, `integrable_joint_first`, `integrable_joint_second`, and
+  `integrable_joint_smooth_prior`, they only use `hf : Continuous f` in one line:
+  `have hfm : Measurable f := hf.measurable`!
+  - **Action item 1a:** Generalize (or provide `_of_measurable` variants of)
+    `isPdf_gaussSmoothed`, `weightedModulus_le`, `stepA_gaussSmoothed`,
+    `integrable_joint_first`, `integrable_joint_second`, `integrable_joint_smooth_prior`,
+    `measurable_gaussSmoothed`, and `integrable_weighted_abs_diff_gaussSmoothed` by
+    replacing `(hf : Continuous f)` with `(hfm : Measurable f)` (note: for any
+    `Integrable f volume`, if `f` is not assumed `Measurable` upfront, either assume
+    `(hfm : Measurable f)` on `f` — every pdf of interest is measurable, or replace `f`
+    by `hfi.1.mk f` a.e.; simplest and cleanest: add `(hfm : Measurable f)` to the
+    target theorem or weaken `Continuous f` to `Measurable f` in those Phase 1 lemmas,
+    since `(hf : Continuous f)` immediately implies `hf.measurable`).
+  - **Action item 1b:** Bridge `weightedModulus n f u` (`f(x−u) − f x`) to Step 0's
+    `weighted_modulus_tendsto_integrable` (`f x − f(x+u)`) via `u ↦ −u` and `abs_sub_comm`:
+    `weightedModulus n f u = ∫ x, (1+‖x‖) * |f x − f (WithLp.toLp 2 (x + (−u)))|`, so
+    `Tendsto (weightedModulus n f) (nhds 0) (nhds 0)` follows in 10 lines from
+    `weighted_modulus_tendsto_integrable.comp tendsto_neg_nhds_zero`!
+  - **Action item 1c:** Then `weighted_smoothing_integrable` is literally a 50-line copy
+    of `weighted_smoothing_tendsto_seq` (or directly replaces it by weakening
+    `Continuous f` to `Measurable f`), using the Step 1b limit in place of
+    `weighted_modulus_tendsto_seq`. This saves ~500 lines of duplicated Fubini/Tonelli code!
 
-**Step 2 — lattice construction.**
-* `latticeQ δ := fun t => δ • ⌊t/δ⌋` componentwise (`Real.floor` per coordinate on the
-  `Fin n → ℝ` projection; watch the `WithLp` coercion care from Phase 1's shifts);
-  `Measurable (latticeQ δ)` (measurability of `floor`-composed maps);
-* displacement bound `‖latticeQ δ t − t‖ ≤ δ·√n`: per-coordinate
-  `|δ·⌊tᵢ/δ⌋ − tᵢ| ≤ δ` (floor inequality manipulation), then the `n`-coordinate
-  Euclidean norm bound (`EuclideanSpace.norm_eq` + squaring);
-* the box: use the SUP-NORM box `B_R = {t | ∀ i, |t i| ≤ R}` (NOT the Euclidean ball —
-  the `Finset` enumeration is then a `Finset.product` of finite `ℤ`-ranges via
-  `Finset.range`/`Ico`, much cleaner); `B_R ⊆ {‖t‖ ≤ R·√n}`;
-* the `Finset` `S(R,δ)` of lattice points in the box (only finiteness needed, not the
-  count); cells `cell_j = latticeQ δ ⁻¹' {j} ∩ B_R` measurable;
-* weights `W_j := ∫_{cell_j} f ∂volume` (`MeasureTheory.setIntegral`); the partition
-  identity `∑_{j∈S} ∫_{cell_j} g = ∫_{B_R} g` for `g ≥ 0` (measurable finite partition
-  `set_integral` lemmas — the voluminous bookkeeping the risk register flags).
+**Step 2 — half-open lattice cell construction (no boundary edge cases).**
+* **Integer index grid & half-open cells (simplification):**
+  Instead of intersecting preimages of `latticeQ` with a closed box `[-R, R]^n` (which
+  causes off-by-one boundary headaches at `t_i = R` where `⌊R/δ⌋` jumps to the next cell),
+  parameterize the finite grid directly by an integer half-width `N : ℕ`:
+  - `gridFinset (n : ℕ) (N : ℕ) : Finset (Fin n → ℤ) :=
+      Fintype.piFinset (fun _ : Fin n => Finset.Ico (-(N : ℤ)) (N : ℤ))`
+  - `latticeIdx (δ : ℝ) (t : EuclideanSpace ℝ (Fin n)) : Fin n → ℤ :=
+      fun i => ⌊(t : Fin n → ℝ) i / δ⌋`
+  - `latticeQ (δ : ℝ) (t : EuclideanSpace ℝ (Fin n)) : EuclideanSpace ℝ (Fin n) :=
+      WithLp.toLp 2 (fun i => δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ))`
+  - `gridPoint (δ : ℝ) (k : Fin n → ℤ) : EuclideanSpace ℝ (Fin n) :=
+      WithLp.toLp 2 (fun i => δ * (k i : ℝ))`
+  - `cell (δ : ℝ) (k : Fin n → ℤ) : Set (EuclideanSpace ℝ (Fin n)) :=
+      {t | ∀ i : Fin n, (k i : ℝ) * δ ≤ (t : Fin n → ℝ) i ∧ (t : Fin n → ℝ) i < ((k i : ℝ) + 1) * δ}`
+    (equivalently `{t | latticeIdx δ t = k}` for `δ > 0` via `Int.floor_eq_iff`).
+* **Why this representation is smooth in Lean:**
+  1. `MeasurableSet (cell δ k)` is immediate (`Finset.measurableSet_biInter` of half-open
+     coordinate intervals `(continuous_apply i).measurable Keep preimage of Ico`).
+  2. On `t ∈ cell δ k`, `latticeQ δ t = gridPoint δ k` is immediate from `Int.floor_eq_iff`
+     (after dividing by `δ > 0`).
+  3. **Pairwise disjointness** of `cell δ k` for `k ∈ gridFinset n N` is 3 lines: if
+     `t ∈ cell δ k₁ ∩ cell δ k₂`, then `k₁ = latticeIdx δ t = k₂`.
+  4. **Covered box:** define `coveredBox (δ : ℝ) (N : ℕ) : Set (EuclideanSpace ℝ (Fin n)) :=
+     ⋃ k ∈ gridFinset n N, cell δ k`. By `Int.floor_eq_iff`, for `N * δ ≥ R`,
+     `{t | ‖t‖ ≤ R} ⊆ {t | ∀ i, |(t : Fin n → ℝ) i| < N * δ} ⊆ coveredBox δ N`, so its
+     complement `(coveredBox δ N)ᶜ` is contained in `{t | R < ‖t‖}`!
+  5. **Partition identity (`sum_setIntegral_cell`):** for any integrable `g`,
+     `∑ k ∈ gridFinset n N, ∫ t in cell δ k, g t ∂volume = ∫ t in coveredBox δ N, g t ∂volume`
+     is a single call to `MeasureTheory.integral_biUnion_finset`!
+  6. **Displacement bound (`norm_latticeQ_sub_le`):** for all `t` and `δ > 0`,
+     `‖latticeQ δ t − t‖ ≤ δ * Real.sqrt n` (from per-coordinate
+     `0 ≤ t_i - δ⌊t_i/δ⌋ < δ` via `Int.floor_le` and `Int.lt_floor_add_one`, plus
+     `EuclideanSpace.norm_eq`).
+  7. **Weights:** `cellWeight f δ k := ∫ t in cell δ k, f t ∂volume`. By the partition
+     identity, `∑ k ∈ gridFinset n N, cellWeight f δ k = ∫ t in coveredBox δ N, f t ∂volume ≤ 1`.
 
-**Step 3 — quantization estimate (`gmmApprox_quantization`).**
-Split `f⋆φ_σ = ∫_{B_R} + ∫_{B_R^c}` at the box; with Step 4's identity:
-`∫ w|f_K − f⋆φ_σ| ≤ ∫_{B_R} f(t)·weightedModulus n φ_σ (t − Q_δ t) dt
-  + (1+σM)·[(1−c) + ∫_{B_R^c} w f]` — the first term via the Tonelli joint block
-  (Phase 1 `ofReal` patterns) and the uniform displacement bound
-  `‖t − Q_δ t‖ ≤ δ√n`; the tail term via `1 − c ≤ ∫_{B_R^c} w f`.
-* **Scaled-modulus lemma** `weightedModulus_gaussian_scale`: with `x = σy`
-  (`integral_subst` transport), `∫ w(x)|φ_σ(x+s) − φ_σ(x)| dx
-  = ∫ (1+σ‖y‖)|φ_1(y+s/σ) − φ_1(y)| dy ≤ L₁(s/σ) + σ·(2M_1 + ‖s/σ‖)`, where
-  `L₁(v) := ∫|φ_1(y+v) − φ_1(y)| dy ≤ weightedModulus n φ_1 v` — so `L₁(s/σ) → 0`
-  by the ALREADY-PROVEN `weighted_modulus_tendsto_seq` at `f := φ_1`
-  (`φ_1` is a continuous pdf with finite first moment: `isPdf_multivariateGaussianPDF`,
-  `integrable_norm_mul_gaussianPDF_center`), and `σ·(2M_1 + ‖s/σ‖) → 0` along
-  `s = δ_K√n`, `σ = σ_K` since `δ_K/σ_K = σ_K → 0`. NOTE: this corrects the old
-  deliverable "`weighted_translation_cont` (from Phase 1) reused" — Phase 1 never
-  formalized that lemma; the kernel's modulus is covered by the existing (T)-lemma,
-  and the general-`f` modulus is Step 0.
+**Step 3 — quantization estimate (`gmmApprox_quantization`) without `sSup` or `Q_δ` joint-integrability.**
+Define `gmmApprox (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (C : Matrix (Fin n) (Fin n) ℝ)
+(hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) (δ : ℝ) (N : ℕ) : EuclideanSpace ℝ (Fin n) → ℝ`:
+`fun x => (∑ k ∈ gridFinset n N, cellWeight f δ k *
+    mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ))))
+  + (1 - ∑ k ∈ gridFinset n N, cellWeight f δ k) * mollifier n C hC σ hσ x`
+(note: using `mollifier n C hC σ hσ (x − μ)` directly matches `gaussSmoothed n f C hC σ hσ`
+and works for *any* positive definite covariance `C`, including `C = 1` where
+`mollifier n 1 _ σ hσ (x − μ) = multivariateGaussianPDF n μ (σ² • 1) _ x`).
+* **Crucial formalization insight — cell-by-cell Tonelli (`Integrable.prod_mul`) eliminates `latticeQ` from joint integrability (and makes Step 4 optional!):**
+  In Bochner-integral Fubini (`MeasureTheory.integral_prod`), swapping `∫_x` and `∫_t`
+  requires proving joint `Integrable` on `volume.prod volume`. If we merged the finite
+  sum over `k ∈ gridFinset n N` into `∫_{coveredBox} f(t) ψ_σ(x − Q_δ(t)) dt` *before*
+  integrating over `x`, we would have to prove joint integrability of a two-variable
+  function involving the floor-quantizer `Q_δ(t)` (~150+ lines of `lintegral` Tonelli
+  boilerplate) and separately prove the `integral_subst` scaling for a difference of two
+  mollifiers.
+  Instead, **keep the finite sum over `k ∈ gridFinset n N` on the outside**:
+  1. For each cell `k`, write
+     `cellWeight f δ k * ψ_σ(x − x_k) − ∫ t in cell δ k, f t * ψ_σ(x − t) ∂volume
+      = ∫ t in cell δ k, f t * (ψ_σ(x − x_k) − ψ_σ(x − t)) ∂volume`
+     (since `ψ_σ(x − x_k)` is constant in `t`, via `integral_mul_const` and `integral_sub`).
+  2. Split `gaussSmoothed … x = (∑ k ∈ gridFinset n N, ∫ t in cell δ k, f t * ψ_σ(x − t))
+     + ∫ t in (coveredBox δ N)ᶜ, f t * ψ_σ(x − t)` (via `integral_add_compl` and Step 2's
+     `integral_biUnion_finset`, using the symmetric convolution rewrite
+     `gaussSmoothed … x = ∫ t, f t * ψ_σ(x − t)` from `integrable_toLp_sub`).
+  3. By the triangle inequality (`abs_add`, `Finset.abs_sum_le_sum_abs`,
+     `abs_integral_le_integral_abs`) and `integral_finsetSum`, the `x`-integral of the
+     difference splits into a finite sum over `k ∈ gridFinset n N` of cell errors plus
+     the two tail pieces (`(1 − c) * ∫ w(x) ψ_σ(x) dx` and the `(coveredBox δ N)ᶜ` tail).
+  4. **Why joint integrability on each cell `k` is now trivial:** on `cell δ k`, the
+     integrand `(t, x) ↦ (cell δ k).indicator f t * ((1 + ‖x‖) * |ψ_σ(x − x_k) − ψ_σ(x − t)|)`
+     is dominated by the sum of:
+     - `(cell δ k).indicator f t * ((1 + ‖x‖) * ψ_σ(x − x_k))`: a **separable product**
+       `g(t) * h(x)` where `x_k` is constant in `t`! Its joint integrability on
+       `volume.prod volume` is a 1-line call to `MeasureTheory.Integrable.prod_mul`!
+     - `f t * ((1 + ‖x‖) * ψ_σ(x − t))`: its joint integrability is ALREADY proven in
+       Phase 1 (`integrable_joint_smooth_prior` + coordinate change)!
+     Thus `Q_δ(t)` (`latticeQ`) NEVER appears inside any product-measure integrability
+     proof; all we need on `t ∈ cell δ k` is the coordinatewise distance bound
+     `‖t − gridPoint δ k‖ ≤ δ * Real.sqrt n`!
+* **Scaled-modulus lemma (`weightedModulus_mollifier_le`):**
+  By linear change of variables `x = σ y` (`integral_subst n 0 (σ • 1)`), for any
+  shift `s : EuclideanSpace ℝ (Fin n)`:
+  `∫ x, (1 + ‖x‖) * |mollifier n C hC σ hσ (x + s) − mollifier n C hC σ hσ x| ∂volume
+   = ∫ y, (1 + σ * ‖y‖) * |φ_C (y + σ⁻¹ • s) − φ_C y| ∂volume`
+  `≤ weightedModulus n φ_C (WithLp.toLp 2 (-(σ⁻¹ • s)))` (when `σ ≤ 1`),
+  and similarly the unweighted $L^1$ shift satisfies
+  `∫ x, |mollifier n C hC σ hσ (x + s) − mollifier n C hC σ hσ x| ∂volume
+   = ∫ y, |φ_C (y + σ⁻¹ • s) − φ_C y| ∂volume
+   ≤ weightedModulus n φ_C (WithLp.toLp 2 (-(σ⁻¹ • s)))` (since `1 ≤ 1 + ‖y‖`).
+  Notice the huge simplification: **for `σ ≤ 1`, BOTH the weighted modulus of `ψ_σ` and
+  the unweighted $L^1$ modulus of `ψ_σ` at shift `s` are bounded by the SINGLE quantity
+  `weightedModulus n φ_C (-(σ⁻¹ • s))`!** We do not even need a separate `L₁` definition
+  or `σ(2M₁ + ‖s/σ‖)` splitting!
+* **Pointwise `η`-bound instead of `sSup` (`gmmApprox_quantization_of_modulus_bound`):**
+  Since `φ_C` is a continuous pdf with finite first moment, `weighted_modulus_tendsto_seq`
+  (or Step 1b) gives `Tendsto (weightedModulus n φ_C) (nhds 0) (nhds 0)`.
+  Instead of taking `sSup` over `‖s‖ ≤ δ√n` (which requires `BddAbove` in Lean), prove
+  `gmmApprox_quantization_of_modulus_bound`:
+  > Given `η > 0`, if `∀ u, ‖u‖ ≤ δ * Real.sqrt n / σ → weightedModulus n φ_C u ≤ η`,
+  > and `σ ≤ 1`, `0 < δ`, `(K : ℝ) ≤ N * δ`, then
+  > `∫ x, (1 + ‖x‖) * |gmmApprox … x − gaussSmoothed … x| ∂volume
+  >  ≤ η * (1 + ∫ t, ‖t‖ * f t ∂volume) + 2 * (1 + M_φ) * ∫ t in {y | (K : ℝ) < ‖y‖}, (1 + ‖t‖) * f t ∂volume`.
+  Proof via the cell-by-cell decomposition above:
+  1. For each cell `k ∈ gridFinset n N`, Tonelli (`integral_prod`) swaps `∫_x` and
+     `∫_{t ∈ cell δ k}`. For each `t ∈ cell δ k`, shifting `y = x − t`
+     (`integral_toLp_trans_right`), bounding `1 + ‖y + t‖ ≤ (1 + ‖y‖) + ‖t‖`, and
+     applying `weightedModulus_mollifier_le` with `s = t − gridPoint δ k`
+     (`‖s‖ ≤ δ * Real.sqrt n`, so `‖-(σ⁻¹ • s)‖ ≤ δ * Real.sqrt n / σ`) bounds the inner
+     `x`-integral by `(1 + ‖t‖) * weightedModulus n φ_C (-(σ⁻¹ • s)) ≤ η * (1 + ‖t‖)`.
+     Integrating over `t ∈ cell δ k` and summing over `k ∈ gridFinset n N` via Step 2's
+     `sum_setIntegral_cell` gives
+     `≤ η * ∫ t in coveredBox δ N, (1 + ‖t‖) * f t ≤ η * (1 + M_f)` (R-free!).
+  2. On `(coveredBox δ N)ᶜ ⊆ {t | (K : ℝ) < ‖t‖}`, both `(1 − c) ∫ w ψ_σ` and
+     `∫_{(coveredBox)ᶜ} f(t) ∫ w(x) ψ_σ(x − t) dx dt` are bounded by
+     `(1 + σ M_φ) * ∫_{(coveredBox)ᶜ} (1 + ‖t‖) f(t) dt ≤ (1 + M_φ) * ∫_{‖t‖ > K} (1 + ‖t‖) f(t) dt`.
 
-**Step 4 — the integral identity (`gmmApprox_integral_identity`).**
-`∑_{j∈S} W_j·φ_σ(x−j) = ∫_{B_R} f(t)·φ_σ(x − Q_δ t) dt`: the integrand
-`φ_σ(x − Q_δ t)` is constant = `φ_σ(x−j)` on each cell, so the identity is the same
-measurable-partition `set_integral` machinery as Step 2 (per-cell pull-out + `Finset`
-sum). This is what makes the quantization term a single Tonelli block rather than a
-sum of cell estimates.
+**Step 5 — `IsPdf (gmmApprox …)` and bridge to `gmmPDF` (`isPdf_gmmApprox`, `gmmApprox_eq_gmmPDF`).**
+* `isPdf_gmmApprox`: Nonnegativity from `0 ≤ cellWeight f δ k`, `1 − c ≥ 0` (since
+  `c = ∫_{coveredBox} f ≤ ∫ f = 1`), and `0 ≤ mollifier`. Mass `= 1` from
+  `integral_add`, `integral_finsetSum`, `integral_const_mul`, `integral_mollifier` (`= 1`),
+  and `c + (1 − c) = 1`.
+* **Syntactic bridge to `gmmPDF` (Goal 2):**
+  To satisfy Goal (2) literally (`g K = gmmPDF n m (σ_K² • C) _ w μ`), note that
+  `mollifier n C hC σ hσ (x − μ) = multivariateGaussianPDF n μ (σ² • C) _ x`
+  (by `multivariateGaussianPDF_eq` and `det`/`inv` scaling of `σ² • C`), and any
+  `Finset`-sum `∑ k ∈ S, W_k * φ(x − μ_k) + (1 − ∑ W_k) * φ(x − 0)` can be re-indexed
+  via `S.equivFin` onto `Fin (S.card + 1)` (`Fin.sum_univ_castSucc`), putting the
+  residual weight `1 − c` at `Fin.last S.card` with location `0`. This 25-line bridge
+  gives an exact `gmmPDF` witness without complicating Steps 3–6!
 
-**Step 5 — `IsPdf (gmmApprox f R σ δ)` (`isPdf_gmmApprox`).**
-Nonnegativity (both terms; `1 − c ≥ 0` from `c ≤ 1`); mass
-`∑_{j∈S} W_j + (1 − ∑_{j∈S} W_j) = 1` via `integral_finsetSum` +
-`integral_gaussianPDF` (`∫ φ_σ = 1`) + `mul_one`, with the partition identity at
-`g = f` for `∑ W_j = c`. Measurability: finite sum of measurable (Gaussian-shift)
-terms — Phase 0's `gmmPDF` measurability pattern.
+**Step 6 — the explicit diagonal sequence (`gmmPriorSeq`) and `hw`.**
+* Choose the explicit parameters at index `K : ℕ`:
+  - `σ_K := 1 / ((K : ℝ) + 1)` (`0 < σ_K ≤ 1`, `σ_K → 0`)
+  - `δ_K := 1 / ((K : ℝ) + 1) ^ 2` (`δ_K / σ_K = σ_K → 0`)
+  - `N_K := (K + 1) ^ 3` (so `N_K * δ_K = K + 1 ≥ K`, ensuring
+    `(coveredBox δ_K N_K)ᶜ ⊆ {t | (K : ℝ) < ‖t‖}` without needing `Nat.ceil`!).
+  *(Choosing `N_K = (K + 1)^3` so that `N_K * δ_K = K + 1` is an exact algebraic identity
+  completely eliminates `Nat.ceil` from the formalization!)*
+* Triangle inequality:
+  `∫ w |f − gmmPriorSeq K| ≤ ∫ w |f − gaussSmoothed K| + ∫ w |gaussSmoothed K − gmmPriorSeq K|`.
+  - First term `→ 0` by Step 1 (`weighted_smoothing_integrable`).
+  - Second term `→ 0` by Step 3 (`gmmApprox_quantization_of_modulus_bound`): given `ε > 0`,
+    pick `η = ε / (4 * (1 + M_f))` to get radius `r > 0` from continuity of
+    `weightedModulus n φ_C` at `0`; for large `K`, `δ_K * √n / σ_K = √n / (K + 1) < r`
+    and the tail `2 * (1 + M_φ) * ∫_{‖t‖ > K} (1 + ‖t‖) f(t) < ε / 2` by
+    `setIntegral_tail_tendsto`.
+* Convert real `∫` convergence to the `∫⁻ ENNReal.ofReal` form `hw` using
+  `ofReal_integral_eq_lintegral_ofReal` (exact Phase 1 `hw_smoothedPriorSeq` pattern).
 
-**Step 6 — the sequence + diagonal (`gmmPriorSeq`) and `hw`.**
-`fhK K := gmmApprox f (K+1) (1/(K+1)) (1/(K+1)²)`. Triangle:
-`∫ w|f − fhK K| ≤ [smoothing @ σ_K] + [quantization @ (σ_K, δ_K)] + [no third term —
-the tails were folded into the quantization estimate's budget]`. Each term is
-eventually `< ε` (or `< ε/2` each): smoothing by Step 1 (`σ_K → 0`), quantization by
-Step 3 (`σ_K → 0`, `δ_K/σ_K = σ_K → 0`). Then the `hw` conversion — the Phase 1
-`hw_smoothedPriorSeq` pattern VERBATIM: per-K `Integrable w·|f − fhK K|` by
-domination (`|f − f_K| ≤ f + f_K`, both weighted-integrable: `f` via
-`hfi.add hfmom`-style, `f_K` via the weighted-mass computation in the design-decisions
-block), `ofReal_integral_eq_lintegral_ofReal` bridge,
-`(ENNReal.ofReal_lt_ofReal_iff hε).mpr`.
-
-**Step 7 — the corollary (`cme_uniform_balls_gmm_prior_general`).**
-`cme_uniform_balls_R m n S hS A f hpdf hfmom gmmPriorSeq (fun K => isPdf_gmmApprox …)
-(hw_gmmPriorSeq …) r hr` — the Phase 1 corollary pattern
-(`cme_uniform_balls_smoothed_prior`), with the defeq/proof-irrelevance care for the
-sequence arguments.
+**Step 7 — the final corollaries (`gmm_density_weighted_L1`, `cme_uniform_balls_gmm_prior_general`).**
+Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact Phase 1
+`cme_uniform_balls_smoothed_prior` pattern).
 
 **Deliverables checklist:**
-* `weighted_modulus_tendsto_integrable` (Step 0), `weighted_smoothing_integrable` (Step 1)
-  — the two new analytic lemmas.
-* `latticeQ` + geometry, `S`/`W`/cells + partition identity (Step 2),
-  `gmmApprox_integral_identity` (Step 4).
-* `gmmApprox` def + `isPdf_gmmApprox` (Steps 3/5), `gmmApprox_quantization` (Step 3).
-* `gmmPriorSeq` + `hw_gmmPriorSeq` (Step 6), `cme_uniform_balls_gmm_prior_general`
-  (Step 7).
-* The **GMM density theorem** (statement at the top of this file) is exactly the
-  ∫-form of Step 6's convergence; state it as a corollary of the same assembly.
+* `weighted_modulus_tendsto_integrable` (Step 0) — **DONE** (together with its
+  unweighted primitive `modulus_tendsto_integrable`; both public, axiom-audited);
+  `weightedModulus_tendsto_integrable` + `weighted_smoothing_integrable` (Step 1) —
+  obtained by weakening `(hf : Continuous f)` to `(hfm : Measurable f)` in the Phase 1
+  smoothing helpers and plugging in Step 0.
+* `gridFinset`, `latticeIdx`, `latticeQ`, `gridPoint`, `cell`, `coveredBox`,
+  `cellWeight`, `sum_setIntegral_cell` (`integral_biUnion_finset`),
+  `norm_latticeQ_sub_le` (Step 2), and `gmmApprox_sum_eq_setIntegral` (Step 4).
+* `gmmApprox` def + `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5),
+  `weightedModulus_mollifier_le` + `gmmApprox_quantization_of_modulus_bound` (Step 3).
+* `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +
+  `hw_gmmPriorSeq` (Step 6), `gmm_density_weighted_L1` +
+  `cme_uniform_balls_gmm_prior_general` (Step 7).
 * `AxiomCheck.lean` audits for every new public theorem (Phase 1 convention).
 * Follow the Phase 1 file layout: public defs/lemmas in `ApproximationByGMM.lean`,
   appended in dependency order.
 
-**Risk register (updated):** (a) the L^p-translation-continuity Mathlib route (Step 0
-core) — verify the exact lemma name/statement for `EuclideanSpace` + `volume` FIRST;
-if the weighted form resists, fall back to the unweighted L¹ route + the Phase 1 tail
-architecture (the original `weighted_translation_cont` shape). (b) the
-measurable-partition `set_integral` bookkeeping (Steps 2/4) — voluminous but standard;
-no new math. (c) the diagonal assembly (Step 6) — keep the ε-budgets as explicit named
-`have`s; the ordering σ → R → δ within each `K` mirrors the Proof-strategy section.
-(d) `Real.floor` manipulation under `WithLp` coercions (Step 2) — expect the usual
-coercion gotchas; do the geometry on the `Fin n → ℝ` projection first.
+**Risk register (updated):**
+(a) the L^p-translation-continuity Mathlib route (Step 0 core) — **RESOLVED: Step 0 is
+done via the unweighted L¹ `DomAddAct` route** (`modulus_tendsto_integrable`) plus the
+Phase 1 tail architecture with integer thresholds.
+(b) the measurable-partition `set_integral` bookkeeping (Steps 2/4) — **SIMPLIFIED**:
+using half-open cells `cell δ k` indexed by `gridFinset n N = Fintype.piFinset (fun _ =>
+Ico (-N) N)` and defining `coveredBox δ N` as their `biUnion` eliminates boundary
+off-by-one issues at `t_i = R` and reduces the partition identity to a direct call to
+`MeasureTheory.integral_biUnion_finset`; choosing `N_K = (K+1)³` with `δ_K = 1/(K+1)²`
+gives `N_K * δ_K = K + 1` algebraically and eliminates `Nat.ceil`.
+(c) the diagonal & quantization assembly (Steps 3/6) — **SIMPLIFIED**:
+  1. **Cell-by-cell Tonelli (`Integrable.prod_mul`)**: keeping the finite sum over
+     `k ∈ gridFinset n N` on the outside and applying Fubini cell-by-cell means the
+     quantized center `x_k = gridPoint δ k` is constant on `cell δ k`, so the
+     `(t, x)`-dominator is a separable product `g(t) * h(x)` whose joint integrability on
+     `volume.prod volume` is a 1-line `MeasureTheory.Integrable.prod_mul` call (plus
+     Phase 1's `integrable_joint_smooth_prior`). Thus `latticeQ` (`Q_δ(t)`) is completely
+     eliminated from all product-measure integrability proofs!
+  2. **Single `weightedModulus` bound**: for `σ ≤ 1`, both the weighted modulus and the
+     unweighted $L^1$ shift of `mollifier … σ` at shift `s` are bounded by the single
+     quantity `weightedModulus n φ_C (-(σ⁻¹ • s))`, eliminating a separate `L₁`
+     definition.
+  3. **`sSup`-free quantization lemma**: stating `gmmApprox_quantization_of_modulus_bound`
+     with an explicit `η`-hypothesis (`∀ u, ‖u‖ ≤ δ√n/σ → weightedModulus n φ_C u ≤ η`)
+     completely avoids `sSup` and `BddAbove` over uncountable balls.
+(d) `Int.floor` manipulation under `WithLp` coercions (Step 2) — do all floor arithmetic
+on the plain `Fin n → ℝ` coordinates (`(t : Fin n → ℝ) i`) via `Int.floor_eq_iff`,
+`Int.floor_le`, and `Int.lt_floor_add_one` before wrapping in `WithLp.toLp 2`.
+(e) the weight-shift correction in §2/Step 3 — keep the `(1 + ‖t‖)` factor inside the
+`coveredBox` integral against `f(t)` so it integrates to `η * (1 + M_f)` (R-free).
 
 ### Non-goals / explicit caveats
 
@@ -736,7 +937,7 @@ session, so this is re-application, not design):**
    mollifier-peak lemma).
 
 
-**Phase 2 Step 0 status (this session):**
+**Phase 2 Step 0 status (final):**
 
 DONE and verified: `modulus_tendsto_integrable` (unweighted L¹ translation continuity for
 integrable `f`, no continuity needed) — via Mathlib's continuous `DomAddAct` action on
@@ -746,12 +947,18 @@ unweighted translation modulus via `L1.dist_def` + `edist_dist` + the a.e. chain
 (`MemLp.coeFn_toLp`, `DomAddAct.vadd_Lp_ae_eq`,
 `hmp.quasiMeasurePreserving.ae_eq_comp`). Full build was green with it.
 
-IN PROGRESS: `weighted_modulus_tendsto_integrable` (the weighted Step 0 lemma) — the
-architecture is fully drafted in the file (core = the unweighted lemma scaled by (1+K) on
-the ball; tails = `setIntegral_tail_tendsto` at K with the threshold-shift transport via
-`integral_toLp_trans_right`; budgets ε/2 + ε/8 + ε/4). ~15 mechanical form-alignment
-errors remain, all of the `+ᵥ`/`toLp`/beta/defeq kind catalogued below, no mathematical
-obstacles.
+DONE and verified (this session): `weighted_modulus_tendsto_integrable` (the weighted
+Step 0 lemma) — full build green, zero `sorry`, public and axiom-audited
+(`AxiomCheck.lean`, 13 audits total). Architecture as implemented: core = the unweighted
+lemma scaled by `(1+K)` on the ball (`hcoreB`/`hcoreu`); tails =
+`setIntegral_tail_tendsto` at the natural thresholds `K` and `K−1` with the
+threshold-shift transport `hI2'le` via `integral_toLp_trans_right` (indicator moved INTO
+the transported function; `(1+‖u‖)` factor from the `htri` bound and `‖u‖ < 1`);
+budgets ε/2 + ε/8 + ε/4. The `+ᵥ`/`toLp`/beta/defeq form-alignment issues catalogued
+below were all resolved in place; the pass also fixed two real defects (a free-`x`
+typo inside the `{y | …}` set literals of `hptx`/`htr`, which made them constant sets,
+and a wrong-shape `le_trans (le_refl _)` step in `hWint`, replaced by
+`add_le_add` + `← mul_assoc`), and bumped the theorem's `maxHeartbeats` to 2000000.
 
 **New gotchas catalogued (Phase 2 Step 0):**
 1. `have h := e` locals do NOT unfold for `rfl`/term-level defeq checks against their own
@@ -777,10 +984,58 @@ obstacles.
    for `(a + b) - b = a` use `add_sub_cancel_right`.
 6. `Continuous.isClosed_preimage` does not exist; get MeasurableSet of `{y | ‖y‖ ≤ K}` via
    `A = Bᶜ` (ext + `not_lt`) + `hBmeas.compl`.
-7. `(K - 1 : ℕ) : ℝ` vs `↑K - 1` cast mismatch: use `K₁` directly (K := K₁ + 1) instead
-   of `K - 1`.
+7. `(K - 1 : ℕ) : ℝ` vs `↑K - 1` cast mismatch. The earlier advice ("use `K₁` directly,
+   never `K - 1`") was **superseded by the implementation**: the statements that must
+   match `hK₁K (K - 1)`/`htK1` (`hI2'le`'s RHS, `hg2int`, `hconv`, `hconst`) all use the
+   `((K - 1 : ℕ) : ℝ)`-set form, and `↑K − 1` is reached only inside `linarith` through
+   `hKm1 : ((K - 1 : ℕ) : ℝ) = (K : ℝ) - 1` (proved by
+   `rw [Nat.cast_sub (by omega : (1:ℕ) ≤ K), Nat.cast_one]`, with `hKdef : K = K₁ + 1`
+   in context for `omega`). `K₁` survives only in the `hK₁` hypothesis. Rule: pick ONE
+   cast form per statement and bridge between forms with a typed `have`, never mix them.
 8. In this module-Mathlib, `Real.instAdd` etc. are NOT exposed for `whnf` defeq unfolding:
    any defeq check that must look inside a real sum FAILS. All Real-arithmetic identities
    must be propositional (`ring`/`linarith` with `hexp`-style rewrites).
 9. abs-indicator integrand statements: count parens by generating the line from the
    verified `hWint` statement template (y-substituted), never by hand.
+
+**Phase 2 Step 0 — final-round gotchas (the green-build pass):**
+10. `rw` closes a refl-trivial goal (`0 = 0`, `0 ≤ 0`, `t ≤ t`) only at the END of its
+    rule sequence. An extra rule after the goal is already trivial reports "did not find
+    an occurrence of the pattern", and a trailing `exact le_refl _` after a closing `rw`
+    reports "No goals to be solved". End such branches with the `rw`-sequence alone —
+    verified in `hpt`-inr, `hWf'2int`-inr, `hg2int`-inl, and the `hI2'le` tail
+    (`rw [hconst, hconv]`).
+11. `mul_assoc` rewrites `(a*b)*c → a*(b*c)` (left-to-right): goals with a
+    right-nested `a * (b * c)` — e.g. `((1:ℝ)+‖u‖) * ((1+‖z‖) * f z)` — need
+    `rw [← mul_assoc]`. Used in `hpt`, `hWf'2int`, `hWint`. (An earlier draft had
+    forward `rw [mul_assoc]` in all three; it fails with "did not find an occurrence".)
+12. `LT.lt.not_le` does not exist for `Real.lt` — `hm.not_le` fails with "Invalid field
+    notation". Use `not_le.mpr hm` / `not_lt.mpr hm`, and ANNOTATE the binder:
+    `fun hc : x ∈ {…} => not_le.mpr hm (show ‖x‖ ≤ (K:ℝ) from hc)`. An unannotated
+    `fun hc =>` lets the `?s`/`?a` metavariables unify backwards (the membership
+    predicate is captured as the set — the pattern comes out as
+    `Set.indicator (fun b => ↑K < ‖b‖) ?f ‖x‖` and never matches).
+13. Multi-line `calc` step proofs break parsing: a `:= term` continued on the next line,
+    or `:= by` + newline tactics in a step whose left-hand side spans lines, gets
+    re-read as a NEW calc step ("invalid 'calc' step", "unexpected token"). Put the step
+    proof on one line, or restructure with a `have`-ladder + `le_trans` (as in `h2` of
+    `htailB`).
+14. `by linarith [Nat.cast_nonneg K]` can leave the cast's type metavariable unsolved
+    (goal `0 ≤ 1 + ↑K` stays open with an "unsolved goals" error). Use `by positivity`
+    for `0 ≤ (1:ℝ) + K`-style goals.
+15. `mul_le_mul_of_nonneg_left (h : b ≤ c) : a*b ≤ a*c` vs
+    `mul_le_mul_of_nonneg_right (h : a ≤ b) : a*c ≤ b*c` — pick the variant whose
+    COMMON factor matches the goal: `((1+‖u‖) * ε/8 ≤ 2 * ε/8)` needs `_right`
+    (common `ε/8` on the right), `(1+‖u‖) * I ≤ (1+‖u‖) * J` needs `_left`.
+16. `linarith` atoms must be syntactically identical: a hypothesis proved in one form
+    (`htri : ‖x‖ ≤ ‖u +ᵥ x‖ + ‖u‖`) is a DIFFERENT atom from the goal's
+    `‖WithLp.toLp 2 (x + u)‖`. Convert first with `rw [← vadd_toLp_add x u]`
+    (as in `hWint`'s `htri`); defeq is not enough.
+17. State the `integral_add` split as a typed
+    `have hadd : (∫ …, A x + B x) = (∫ …, A x) + (∫ …, B x) := integral_add hf hg`
+    (defeq-checked, beta/zeta absorbed) and `rw [hadd, hI1']`; a bare
+    `rw [integral_add hf hg]` must match the goal's integrand through the beta/zeta
+    redexes left by `.add`/`.indicator` chains and can fail.
+18. The `hI2'le` tail needs `set_option maxHeartbeats 2000000` (the kernel timed out at
+    the default and at 800000): the `show`-defeq canonicalization plus
+    `rw [hconst, hconv]` produces expensive proof terms.
