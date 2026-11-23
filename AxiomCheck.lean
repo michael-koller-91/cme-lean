@@ -80,3 +80,15 @@ info: 'weighted_modulus_tendsto_integrable' depends on axioms: [propext, Classic
 -/
 #guard_msgs in
 #print axioms weighted_modulus_tendsto_integrable
+
+/--
+info: 'weightedModulus_tendsto_integrable' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms weightedModulus_tendsto_integrable
+
+/--
+info: 'weighted_smoothing_integrable' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms weighted_smoothing_integrable

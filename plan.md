@@ -1,9 +1,11 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Step 0 is implemented
-and verified (`modulus_tendsto_integrable` + `weighted_modulus_tendsto_integrable`,
-public and axiom-audited; full build green, zero `sorry`); Steps 1–7 of Phase 2 are
-planning documents.
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–1 are implemented
+and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
+`weightedModulus_tendsto_integrable`, and `weighted_smoothing_integrable`, with Phase 1
+smoothing helpers generalized from `Continuous f` to `Measurable f`; all public and
+axiom-audited; full build green, zero `sorry`); Steps 2–7 of Phase 2 are planning
+documents.
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -541,7 +543,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Step 0 DONE; Steps 1–7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–1 DONE; Steps 2–7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -609,33 +611,28 @@ statement sketch):
   *primitive* the core is built on; the weighted form is what Step 1 consumes
   (Step 3's `L₁` at `φ_1` follows from the (T)-lemma by domination `1 ≤ w`).
 
-**Step 1 — smoothing for general `f` (`weighted_smoothing_integrable`).**
-`∫ w·|f − f⋆φ_σ| → 0` as `σ → 0` (`f` integrable + finite first moment, NO continuity).
+**Step 1 — smoothing for general `f` (`weighted_smoothing_integrable`) — DONE (public, axiom-audited).**
+`∫ w·|f − f⋆φ_σ| → 0` as `σ → 0` (`f` measurable pdf + finite first moment, NO continuity).
 * **Reuse existing Phase 1 infrastructure instead of writing a new `G_f`:**
   In `ApproximationByGMM.lean`, `weightedModulus n f u` (`= ∫ (1+‖x‖)*|f(x−u) − f x| dx`)
   is ALREADY defined! Moreover, inspecting the proof of `weightedModulus_le`,
   `stepA_gaussSmoothed`, `integrable_joint_first`, `integrable_joint_second`, and
   `integrable_joint_smooth_prior`, they only use `hf : Continuous f` in one line:
   `have hfm : Measurable f := hf.measurable`!
-  - **Action item 1a:** Generalize (or provide `_of_measurable` variants of)
-    `isPdf_gaussSmoothed`, `weightedModulus_le`, `stepA_gaussSmoothed`,
-    `integrable_joint_first`, `integrable_joint_second`, `integrable_joint_smooth_prior`,
-    `measurable_gaussSmoothed`, and `integrable_weighted_abs_diff_gaussSmoothed` by
-    replacing `(hf : Continuous f)` with `(hfm : Measurable f)` (note: for any
-    `Integrable f volume`, if `f` is not assumed `Measurable` upfront, either assume
-    `(hfm : Measurable f)` on `f` — every pdf of interest is measurable, or replace `f`
-    by `hfi.1.mk f` a.e.; simplest and cleanest: add `(hfm : Measurable f)` to the
-    target theorem or weaken `Continuous f` to `Measurable f` in those Phase 1 lemmas,
-    since `(hf : Continuous f)` immediately implies `hf.measurable`).
-  - **Action item 1b:** Bridge `weightedModulus n f u` (`f(x−u) − f x`) to Step 0's
-    `weighted_modulus_tendsto_integrable` (`f x − f(x+u)`) via `u ↦ −u` and `abs_sub_comm`:
-    `weightedModulus n f u = ∫ x, (1+‖x‖) * |f x − f (WithLp.toLp 2 (x + (−u)))|`, so
-    `Tendsto (weightedModulus n f) (nhds 0) (nhds 0)` follows in 10 lines from
-    `weighted_modulus_tendsto_integrable.comp tendsto_neg_nhds_zero`!
-  - **Action item 1c:** Then `weighted_smoothing_integrable` is literally a 50-line copy
-    of `weighted_smoothing_tendsto_seq` (or directly replaces it by weakening
-    `Continuous f` to `Measurable f`), using the Step 1b limit in place of
-    `weighted_modulus_tendsto_seq`. This saves ~500 lines of duplicated Fubini/Tonelli code!
+  - **Action item 1a (DONE):** Generalized `isPdf_gaussSmoothed`, `weightedModulus_le`,
+    `stepA_gaussSmoothed`, `integrable_joint_first`, `integrable_joint_second`,
+    `integrable_joint_smooth_prior`, `measurable_gaussSmoothed`, and
+    `integrable_weighted_abs_diff_gaussSmoothed` by replacing `(hf : Continuous f)` with
+    `(hfm : Measurable f)`.
+  - **Action item 1b (DONE):** Bridged `weightedModulus n f u` (`f(x−u) − f x`) to Step 0's
+    `weighted_modulus_tendsto_integrable` (`f x − f(x+u)`) via `u ↦ −u` and `abs_sub_comm`
+    in `weightedModulus_tendsto_integrable`:
+    `Tendsto (weightedModulus n f) (nhds 0) (nhds 0)`.
+  - **Action item 1c (DONE):** Proved `weighted_smoothing_integrable` for any measurable
+    `IsPdf f` with finite first moment by combining the generalized Step A / Step B
+    helpers with `weightedModulus_tendsto_integrable` in the DCT step. Both
+    `weightedModulus_tendsto_integrable` and `weighted_smoothing_integrable` are audited in
+    `AxiomCheck.lean`.
 
 **Step 2 — half-open lattice cell construction (no boundary edge cases).**
 * **Integer index grid & half-open cells (simplification):**
@@ -792,9 +789,9 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
 **Deliverables checklist:**
 * `weighted_modulus_tendsto_integrable` (Step 0) — **DONE** (together with its
   unweighted primitive `modulus_tendsto_integrable`; both public, axiom-audited);
-  `weightedModulus_tendsto_integrable` + `weighted_smoothing_integrable` (Step 1) —
-  obtained by weakening `(hf : Continuous f)` to `(hfm : Measurable f)` in the Phase 1
-  smoothing helpers and plugging in Step 0.
+  `weightedModulus_tendsto_integrable` + `weighted_smoothing_integrable` (Step 1) — **DONE**
+  (obtained by weakening `(hf : Continuous f)` to `(hfm : Measurable f)` in the Phase 1
+  smoothing helpers and plugging in Step 0; both public, axiom-audited).
 * `gridFinset`, `latticeIdx`, `latticeQ`, `gridPoint`, `cell`, `coveredBox`,
   `cellWeight`, `sum_setIntegral_cell` (`integral_biUnion_finset`),
   `norm_latticeQ_sub_le` (Step 2), and `gmmApprox_sum_eq_setIntegral` (Step 4).

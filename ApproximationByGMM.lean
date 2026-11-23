@@ -1414,12 +1414,11 @@ theorem lintegral_mollifier_mul_norm (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ) 
 
 /-- The Gaussian-smoothed prior is a pdf (nonnegative with mass 1). -/
 public theorem isPdf_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (hpdf : IsPdf f)
-    (hf : Continuous f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
+    (hfm : Measurable f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
     IsPdf (gaussSmoothed n f C hC σ hσ) := by
   classical
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
-  have hfm : Measurable f := hf.measurable
   have hψmeas' : Measurable (mollifier n C hC σ hσ) := by
     show Measurable (fun u : EuclideanSpace ℝ (Fin n) => (σ : ℝ)⁻¹ ^ n *
       multivariateGaussianPDF n 0 C hC
@@ -1569,7 +1568,7 @@ public noncomputable def weightedModulus (n : ℕ) (f : EuclideanSpace ℝ (Fin 
 `∫ (1 + ‖x‖) f (x − u)` is at most `(1 + ‖u‖) (1 + M_f)` by the triangle inequality and the
 translation invariance of `volume`. -/
 public theorem weightedModulus_le (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (u : EuclideanSpace ℝ (Fin n)) :
     weightedModulus n f u
@@ -1577,7 +1576,6 @@ public theorem weightedModulus_le (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → 
   classical
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
-  have hfm : Measurable f := hf.measurable
   show ∫ x : EuclideanSpace ℝ (Fin n),
       (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x| ∂volume
     ≤ (1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * (2 + ‖u‖)
@@ -1751,7 +1749,7 @@ subtraction identity and `|∫ g| ≤ ∫ |g|`; per-x integrability of the two s
 integrand factors follows from the reflection `u ↦ −u` (measure-preserving) and the
 peak domination `ψ_σ(u) ≤ ψ_σ(0)`. -/
 public theorem stepA_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s)
     (x : EuclideanSpace ℝ (Fin n)) :
@@ -1769,7 +1767,6 @@ public theorem stepA_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) →
       mollifier n C hC s hs u ≤ mollifier n C hC s hs 0 := mollifier_le_zero n C hC s hs
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
-  have hfm : Measurable f := hf.measurable
   have hψmeas := measurable_mollifier n C hC s hs
   have h2 : MeasureTheory.Integrable (fun u : EuclideanSpace ℝ (Fin n) =>
       mollifier n C hC s hs u * f x) volume := hψint.mul_const (f x)
@@ -1837,7 +1834,7 @@ public theorem stepA_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) →
 difference integrand, ψ on the first coordinate (the `(T)`-lemma's Tonelli
 orientation), via the ∫⁻ Tonelli bound with the mollifier's first moment. -/
 public theorem integrable_joint_first (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
     MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
@@ -1847,7 +1844,6 @@ public theorem integrable_joint_first (n : ℕ) (f : EuclideanSpace ℝ (Fin n) 
   classical
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
-  have hfm : Measurable f := hf.measurable
   have hψpos : ∀ u : EuclideanSpace ℝ (Fin n), 0 ≤ mollifier n C hC s hs u :=
     fun u => mollifier_nonneg n C hC s hs u
   have hflint : ∫⁻ y : EuclideanSpace ℝ (Fin n), ‖f y‖ₑ ∂volume = 1 := by
@@ -2118,21 +2114,20 @@ public theorem integrable_joint_first (n : ℕ) (f : EuclideanSpace ℝ (Fin n) 
 /-- **Step B of the smoothing theorem**: joint integrability of the ψ-weighted
 difference integrand in the x-first orientation, by the measure-preserving swap. -/
 public theorem integrable_joint_second (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
     MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
         EuclideanSpace ℝ (Fin n) => (1 + ‖p.1‖) * (mollifier n C hC s hs p.2 *
           |f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ))) - f p.1|))
         (volume.prod volume) := by
-  have hfm : Measurable f := hf.measurable
   have hψmeas := measurable_mollifier n C hC s hs
   have hswapmp : MeasureTheory.MeasurePreserving (Prod.swap : EuclideanSpace ℝ (Fin n) ×
       EuclideanSpace ℝ (Fin n) → EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n))
       (volume.prod volume) (volume.prod volume) :=
     MeasureTheory.Measure.measurePreserving_swap
   have hΦmeas := measurable_joint_first n f hfm C hC s hs
-  have hΦint := integrable_joint_first n f hf hpdf hfmom C hC s hs
+  have hΦint := integrable_joint_first n f hfm hpdf hfmom C hC s hs
   refine ((hswapmp.integrable_comp hΦmeas.aestronglyMeasurable).mpr hΦint).congr' ?_ ?_
   · exact ((by fun_prop : Measurable fun p : EuclideanSpace ℝ (Fin n) ×
       EuclideanSpace ℝ (Fin n) => (1 + ‖p.1‖) * (mollifier n C hC s hs p.2 *
@@ -2152,7 +2147,7 @@ public theorem integrable_joint_second (n : ℕ) (f : EuclideanSpace ℝ (Fin n)
 ∫⁻ Tonelli bound: `w(x) ≤ (1 + ‖u‖) (1 + ‖x − u‖)`, the `x − u`-shift, and the
 mollifier's first moment `∫⁻ ψ_σ(u) (1 + ‖u‖) = 1 + ofReal (σ · M_φ)`. -/
 public theorem integrable_joint_smooth_prior (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (hpdf : IsPdf f)
+    (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
     MeasureTheory.Integrable (fun p : EuclideanSpace ℝ (Fin n) ×
@@ -2163,7 +2158,6 @@ public theorem integrable_joint_smooth_prior (n : ℕ) (f : EuclideanSpace ℝ (
   have hψmeas := measurable_mollifier n C hC s hs
   have hf0 : 0 ≤ f := hpdf.1
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
-  have hfm : Measurable f := hf.measurable
   have hwnonneg : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ (1 + ‖x‖) * f x := fun x =>
     mul_nonneg (add_nonneg zero_le_one (norm_nonneg x)) (hf0 x)
   have heqw : (fun x : EuclideanSpace ℝ (Fin n) => (1 + ‖x‖) * f x)
@@ -2402,7 +2396,7 @@ public theorem weighted_smoothing_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ 
     have hψ0le : ∀ u : EuclideanSpace ℝ (Fin n),
         mollifier n C hC s hs u ≤ mollifier n C hC s hs 0 := mollifier_le_zero n C hC s hs
     have hgsi : MeasureTheory.Integrable (gaussSmoothed n f C hC s hs) volume :=
-      integrable_of_isPdf (isPdf_gaussSmoothed n f hpdf hf C hC s hs)
+      integrable_of_isPdf (isPdf_gaussSmoothed n f hpdf hfm C hC s hs)
     -- measurability of the smoothing: the x-marginal integral of the joint function
     have hGxmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
         mollifier n C hC s hs p.2 *
@@ -2918,7 +2912,7 @@ public theorem weighted_smoothing_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ 
         rw [Real.norm_eq_abs, abs_mul, abs_of_pos (multivariateGaussianPDF_pos n 0 C hC v),
           abs_of_nonneg hwmnn]
         refine mul_le_mul_of_nonneg_left ?_ (le_of_lt (multivariateGaussianPDF_pos n 0 C hC v))
-        refine le_trans (weightedModulus_le n f hf hpdf hfmom
+        refine le_trans (weightedModulus_le n f hfm hpdf hfmom
           (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))) ?_
         refine mul_le_mul_of_nonneg_left ?_ (by linarith [hMnn])
         have hnorm : ‖WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))‖
@@ -2992,7 +2986,7 @@ public theorem weighted_smoothing_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ 
 /-- Measurability of the Gaussian-smoothed prior: the `x`-marginal integral of the
 joint `(x, u) ↦ ψ_σ(u) · f (x − u)`. -/
 public theorem measurable_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
-    (hf : Continuous f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
+    (hfm : Measurable f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) :
     Measurable (gaussSmoothed n f C hC σ hσ) := by
   have hψmeas : Measurable (mollifier n C hC σ hσ) := measurable_mollifier n C hC σ hσ
   have hGxmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
@@ -3011,7 +3005,7 @@ public noncomputable def smoothedPriorSeq (n : ℕ) (f : EuclideanSpace ℝ (Fin
 is integrable, by domination with `(1 + ‖x‖) · f x + ∫ ψ_σ(u) · (1 + ‖x‖) · f (x − u) du`
 (the second piece is the `x`-marginal of the ψ-first joint function). -/
 public theorem integrable_weighted_abs_diff_gaussSmoothed (n : ℕ)
-    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf : Continuous f) (hpdf : IsPdf f)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hfm : Measurable f) (hpdf : IsPdf f)
     (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s) :
     MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
@@ -3021,7 +3015,7 @@ public theorem integrable_weighted_abs_diff_gaussSmoothed (n : ℕ)
   have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
   have hψmeas : Measurable (mollifier n C hC s hs) := measurable_mollifier n C hC s hs
   have hgsmm : Measurable (gaussSmoothed n f C hC s hs) :=
-    measurable_gaussSmoothed n f hf C hC s hs
+    measurable_gaussSmoothed n f hfm C hC s hs
   have hx : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ (1:ℝ) + ‖x‖ := fun x =>
     by linarith [norm_nonneg x]
   have hgsmpos : ∀ x : EuclideanSpace ℝ (Fin n), 0 ≤ gaussSmoothed n f C hC s hs x := fun x =>
@@ -3038,7 +3032,7 @@ public theorem integrable_weighted_abs_diff_gaussSmoothed (n : ℕ)
   have hg2 : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
       (1 + ‖x‖) * gaussSmoothed n f C hC s hs x) volume := by
     refine MeasureTheory.Integrable.mono'
-      ((integrable_joint_smooth_prior n f hf hpdf hfmom C hC s hs).integral_prod_right) ?_ ?_
+      ((integrable_joint_smooth_prior n f hfm hpdf hfmom C hC s hs).integral_prod_right) ?_ ?_
     · exact ((by fun_prop : Measurable fun x : EuclideanSpace ℝ (Fin n) =>
         (1 + ‖x‖) * gaussSmoothed n f C hC s hs x)).aestronglyMeasurable
     · filter_upwards with x
@@ -3093,7 +3087,7 @@ public theorem hw_smoothedPriorSeq (n : ℕ) (f : EuclideanSpace ℝ (Fin n) →
   -- per-K integrability and the ∫⁻ ↔ ∫ bridge
   have hKint : ∀ K : ℕ, MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
       (1 + ‖x‖) * |f x - smoothedPriorSeq n f C hC K x|) volume := fun K =>
-    integrable_weighted_abs_diff_gaussSmoothed n f hf hpdf hfmom C hC
+    integrable_weighted_abs_diff_gaussSmoothed n f hf.measurable hpdf hfmom C hC
       ((1:ℝ)/((K:ℝ) + 1)) (hσpos K)
   have hwnn : ∀ K : ℕ, 0 ≤ᵐ[volume] (fun x : EuclideanSpace ℝ (Fin n) =>
       (1 + ‖x‖) * |f x - smoothedPriorSeq n f C hC K x|) := fun K =>
@@ -3131,7 +3125,7 @@ public theorem cme_uniform_balls_smoothed_prior (m n : ℕ) (S : Matrix (Fin m) 
   have hσpos : ∀ K : ℕ, 0 < (1:ℝ)/((K:ℝ) + 1) := fun K =>
     div_pos one_pos (by positivity)
   exact cme_uniform_balls_R m n S hS A f hpdf hfmom (smoothedPriorSeq n f C hC)
-    (fun K => isPdf_gaussSmoothed n f hpdf hf C hC ((1:ℝ)/((K:ℝ) + 1)) (hσpos K))
+    (fun K => isPdf_gaussSmoothed n f hpdf hf.measurable C hC ((1:ℝ)/((K:ℝ) + 1)) (hσpos K))
     (hw_smoothedPriorSeq n f hf hpdf hfmom C hC) r hr
 
 /-! ## Phase 2, Step 0: weighted translation continuity for integrable `f` (no continuity)
@@ -3807,3 +3801,278 @@ public theorem weighted_modulus_tendsto_integrable {n : ℕ}
       (abs_nonneg _)), hsplit]
   refine lt_trans (add_lt_add hcoreu2 htailB) ?_
   linarith
+
+/-! ## Phase 2, Step 1: weighted Gaussian smoothing for general (measurable) `f`
+
+Using `weighted_modulus_tendsto_integrable` (Step 0), we remove the continuity hypothesis
+from `weightedModulus`'s limit at `0` and from the Phase 1 Gaussian smoothing theorem. -/
+
+/-- The weighted translation modulus `weightedModulus n f u = ∫ (1 + ‖x‖) * |f (x − u) − f x| dx`
+tends to `0` as `u → 0` for any nonnegative integrable `f` with finite first moment (no continuity
+assumption on `f`). -/
+public theorem weightedModulus_tendsto_integrable {n : ℕ}
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hf0 : 0 ≤ f)
+    (hfi : MeasureTheory.Integrable f volume)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume) :
+    Filter.Tendsto (weightedModulus n f) (nhds 0) (nhds 0) := by
+  have hneg : Filter.Tendsto (fun u : EuclideanSpace ℝ (Fin n) => -u) (nhds 0) (nhds 0) := by
+    simpa only [neg_zero] using (continuous_neg.tendsto (0 : EuclideanSpace ℝ (Fin n)))
+  have hcomp := (weighted_modulus_tendsto_integrable f hf0 hfi hfmom).comp hneg
+  refine hcomp.congr fun u => ?_
+  show ∫ x : EuclideanSpace ℝ (Fin n),
+      (1 + ‖x‖) * |f x - f (WithLp.toLp 2 ((x : Fin n → ℝ) + ((-u : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)))| ∂volume
+    = ∫ x : EuclideanSpace ℝ (Fin n),
+      (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x| ∂volume
+  refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+  show (1 + ‖x‖) * |f x - f (WithLp.toLp 2 ((x : Fin n → ℝ) + ((-u : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)))|
+    = (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x|
+  have hsub : WithLp.toLp 2 ((x : Fin n → ℝ) + ((-u : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ))
+      = WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ)) := rfl
+  rw [hsub, abs_sub_comm]
+
+/-- **Phase 2, Step 1 (`weighted_smoothing_integrable`)**: for any measurable pdf `f` with finite
+first moment (no continuity needed), the weighted L¹ distance between `f` and its Gaussian
+smoothing tends to `0` along every positive sequence `σ k → 0`. -/
+public theorem weighted_smoothing_integrable (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfm : Measurable f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℕ → ℝ) (hσ : ∀ k, 0 < σ k) (hσ0 : Filter.Tendsto σ Filter.atTop (nhds 0)) :
+    Filter.Tendsto (fun k : ℕ => ∫ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f x - gaussSmoothed n f C hC (σ k) (hσ k) x| ∂volume)
+      Filter.atTop (nhds 0) := by
+  classical
+  have hf0 : 0 ≤ f := hpdf.1
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  have hMnn : 0 ≤ ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume :=
+    MeasureTheory.integral_nonneg fun y => mul_nonneg (norm_nonneg y) (hf0 y)
+  have hwmseq : ∀ (u : ℕ → EuclideanSpace ℝ (Fin n)),
+      Filter.Tendsto u Filter.atTop (nhds 0) →
+      Filter.Tendsto (fun k : ℕ => weightedModulus n f (u k)) Filter.atTop (nhds 0) :=
+    fun u hu => (weightedModulus_tendsto_integrable f hf0 hfi hfmom).comp hu
+  have hwmAe := aemeasurable_weightedModulus n f hfm
+  -- the per-σ chain, reusing the extracted Step A and Step B lemmas
+  have hchain : ∀ (s : ℝ) (hs : 0 < s),
+      ∫ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x| ∂volume
+      ≤ ∫ v : EuclideanSpace ℝ (Fin n),
+          multivariateGaussianPDF n 0 C hC v *
+            weightedModulus n f (WithLp.toLp 2 ((s : ℝ) • (v : Fin n → ℝ))) ∂volume := by
+    intro s hs
+    have hstepA := stepA_gaussSmoothed n f hfm hpdf hfmom C hC s hs
+    have hΦint := integrable_joint_first n f hfm hpdf hfmom C hC s hs
+    have hFxint := integrable_joint_second n f hfm hpdf hfmom C hC s hs
+    have hRint : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        ∫ y : EuclideanSpace ℝ (Fin n),
+          (1 + ‖x‖) * (mollifier n C hC s hs y *
+            |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (y : Fin n → ℝ))) - f x|) ∂volume) volume :=
+      hFxint.integral_prod_left
+    have hA : ∀ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|
+        ≤ ∫ y : EuclideanSpace ℝ (Fin n),
+            (1 + ‖x‖) * (mollifier n C hC s hs y *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (y : Fin n → ℝ))) - f x|) ∂volume := by
+      intro x
+      refine le_trans (mul_le_mul_of_nonneg_left (hstepA x) (by linarith [norm_nonneg x])) ?_
+      exact le_of_eq ((MeasureTheory.integral_const_mul (1 + ‖x‖) (fun u =>
+        mollifier n C hC s hs u *
+          |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x|)).symm)
+    have hLint : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x|) volume :=
+      integrable_weighted_abs_diff_gaussSmoothed n f hfm hpdf hfmom C hC s hs
+    have hB1 : ∫ x : EuclideanSpace ℝ (Fin n),
+        (1 + ‖x‖) * |f x - gaussSmoothed n f C hC s hs x| ∂volume
+      ≤ ∫ u : EuclideanSpace ℝ (Fin n),
+          ∫ x : EuclideanSpace ℝ (Fin n),
+            mollifier n C hC s hs u * ((1 + ‖x‖) *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x|) ∂volume ∂volume := by
+      refine le_trans (MeasureTheory.integral_mono hLint hRint hA) ?_
+      calc ∫ x : EuclideanSpace ℝ (Fin n),
+          ∫ u : EuclideanSpace ℝ (Fin n),
+            (1 + ‖x‖) * (mollifier n C hC s hs u *
+              |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x|) ∂volume ∂volume
+          ≤ ∫ z : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+              (1 + ‖z.1‖) * (mollifier n C hC s hs z.2 *
+                |f (WithLp.toLp 2 ((z.1 : Fin n → ℝ) - (z.2 : Fin n → ℝ))) - f z.1|)
+                ∂(volume.prod volume) := by
+            rw [← MeasureTheory.integral_prod
+              (f := fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+                (1 + ‖p.1‖) * (mollifier n C hC s hs p.2 *
+                  |f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ))) - f p.1|))
+              (μ := volume) (ν := volume) hFxint]
+        _ = ∫ z : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+              (1 + ‖z.swap.1‖) * (mollifier n C hC s hs z.swap.2 *
+                |f (WithLp.toLp 2 (z.swap.1.ofLp - z.swap.2.ofLp)) - f z.swap.1|)
+                ∂(volume.prod volume) := by
+            rw [← MeasureTheory.integral_prod_swap
+              (f := fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+                (1 + ‖p.1‖) * (mollifier n C hC s hs p.2 *
+                  |f (WithLp.toLp 2 ((p.1 : Fin n → ℝ) - (p.2 : Fin n → ℝ))) - f p.1|))
+              (μ := volume) (ν := volume)]
+        _ = ∫ z : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+              mollifier n C hC s hs z.1 * ((1 + ‖z.2‖) *
+                |f (WithLp.toLp 2 ((z.2 : Fin n → ℝ) - (z.1 : Fin n → ℝ))) - f z.2|)
+                ∂(volume.prod volume) := by
+            have hswapcongr : ∀ z : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n),
+                (1 + ‖z.swap.1‖) * (mollifier n C hC s hs z.swap.2 *
+                  |f (WithLp.toLp 2 (z.swap.1.ofLp - z.swap.2.ofLp)) - f z.swap.1|)
+                = mollifier n C hC s hs z.1 * ((1 + ‖z.2‖) *
+                  |f (WithLp.toLp 2 ((z.2 : Fin n → ℝ) - (z.1 : Fin n → ℝ))) - f z.2|) := by
+              intro z
+              simp only [Prod.swap]
+              ring
+            exact MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall hswapcongr)
+        _ = ∫ u : EuclideanSpace ℝ (Fin n),
+              ∫ x : EuclideanSpace ℝ (Fin n),
+                mollifier n C hC s hs u * ((1 + ‖x‖) *
+                  |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u : Fin n → ℝ))) - f x|)
+                  ∂volume ∂volume := by
+            rw [MeasureTheory.integral_prod
+              (f := fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+                mollifier n C hC s hs p.1 * ((1 + ‖p.2‖) *
+                  |f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) - (p.1 : Fin n → ℝ))) - f p.2|))
+              (μ := volume) (ν := volume) hΦint]
+    refine le_trans (le_trans hB1
+      (le_of_eq (MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun u => by
+        simp only [weightedModulus]
+        rw [MeasureTheory.integral_const_mul (mollifier n C hC s hs u)]))))
+      (le_of_eq (integral_mollifier_mul n C hC s hs (weightedModulus n f) hwmAe))
+  -- Step C: dominated convergence on the shifted sequence `σ (· + k₀)`
+  obtain ⟨k₀, hk₀⟩ := Filter.eventually_atTop.mp
+    (Metric.tendsto_nhds.mp hσ0 1 one_pos)
+  have hσ1 : ∀ k : ℕ, (σ (k + k₀) : ℝ) ≤ 1 := by
+    intro k
+    have h := hk₀ (k + k₀) (Nat.le_add_left k₀ k)
+    rw [Real.dist_eq, sub_zero, abs_of_pos (hσ _)] at h
+    exact le_of_lt h
+  have hσ' : Filter.Tendsto (fun k : ℕ => σ (k + k₀)) Filter.atTop (nhds 0) := by
+    refine Metric.tendsto_nhds.mpr fun δ hδ => ?_
+    obtain ⟨N, hN⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hσ0 δ hδ)
+    exact Filter.eventually_atTop.mpr ⟨N, fun k hk =>
+      hN (k + k₀) (Nat.le_trans hk (Nat.le_add_right k k₀))⟩
+  have hdct : Filter.Tendsto (fun k : ℕ => ∫ v : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n 0 C hC v *
+        weightedModulus n f (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))) Filter.atTop
+      (nhds 0) := by
+    have hbdint : MeasureTheory.Integrable (fun v : EuclideanSpace ℝ (Fin n) =>
+        multivariateGaussianPDF n 0 C hC v *
+          ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * (2 + ‖v‖))) volume := by
+      have hφCint : MeasureTheory.Integrable (multivariateGaussianPDF n 0 C hC) volume :=
+        integrable_of_isPdf (isPdf_multivariateGaussianPDF n 0 C hC)
+      have h1 : MeasureTheory.Integrable (fun v : EuclideanSpace ℝ (Fin n) =>
+          multivariateGaussianPDF n 0 C hC v *
+            ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * 2)) volume :=
+        hφCint.mul_const _
+      have h2 : MeasureTheory.Integrable (fun v : EuclideanSpace ℝ (Fin n) =>
+          (‖v‖ * multivariateGaussianPDF n 0 C hC v) *
+            (1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume)) volume :=
+        (integrable_norm_mul_gaussianPDF_center n C hC).mul_const _
+      have heq : (fun v : EuclideanSpace ℝ (Fin n) =>
+            multivariateGaussianPDF n 0 C hC v *
+              ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * (2 + ‖v‖)))
+          = (fun v : EuclideanSpace ℝ (Fin n) =>
+              multivariateGaussianPDF n 0 C hC v *
+                ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * 2))
+            + (fun v : EuclideanSpace ℝ (Fin n) =>
+              (‖v‖ * multivariateGaussianPDF n 0 C hC v) *
+                (1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume)) := by
+        funext v
+        simp only [Pi.add_apply]
+        ring
+      rw [heq]
+      exact h1.add h2
+    have hwmSm : StronglyMeasurable (weightedModulus n f) := by
+      have hKmeas : Measurable (fun p : EuclideanSpace ℝ (Fin n) × EuclideanSpace ℝ (Fin n) =>
+          (1 + ‖p.2‖) * |f (WithLp.toLp 2 ((p.2 : Fin n → ℝ) -
+            (p.1 : Fin n → ℝ))) - f p.2|) := by
+        fun_prop
+      exact hKmeas.stronglyMeasurable.integral_prod_right'
+    have hFmeas : ∀ k : ℕ, AEStronglyMeasurable (fun v : EuclideanSpace ℝ (Fin n) =>
+        multivariateGaussianPDF n 0 C hC v *
+          weightedModulus n f (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))) volume :=
+      fun k => ((measurable_multivariateGaussianPDF n 0 C hC).stronglyMeasurable.mul
+        (hwmSm.comp_measurable (by fun_prop : Measurable fun v : EuclideanSpace ℝ (Fin n) =>
+          WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))))).aestronglyMeasurable
+    have hbound : ∀ k : ℕ, ∀ᵐ (v : EuclideanSpace ℝ (Fin n)) ∂volume,
+        ‖multivariateGaussianPDF n 0 C hC v *
+          weightedModulus n f (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))‖
+        ≤ multivariateGaussianPDF n 0 C hC v *
+          ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * (2 + ‖v‖)) :=
+      fun k => Filter.Eventually.of_forall (fun v => by
+        have hwmnn : 0 ≤ weightedModulus n f (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))) :=
+          show 0 ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+              (1 + ‖x‖) * |f (WithLp.toLp 2 ((x : Fin n → ℝ) -
+                (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)) : Fin n → ℝ))) - f x| ∂volume
+            from MeasureTheory.integral_nonneg fun x => mul_nonneg
+              (by linarith [norm_nonneg x]) (abs_nonneg _)
+        rw [Real.norm_eq_abs, abs_mul, abs_of_pos (multivariateGaussianPDF_pos n 0 C hC v),
+          abs_of_nonneg hwmnn]
+        refine mul_le_mul_of_nonneg_left ?_ (le_of_lt (multivariateGaussianPDF_pos n 0 C hC v))
+        refine le_trans (weightedModulus_le n f hfm hpdf hfmom
+          (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))) ?_
+        refine mul_le_mul_of_nonneg_left ?_ (by linarith [hMnn])
+        have hnorm : ‖WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))‖
+            = (σ (k + k₀) : ℝ) * ‖v‖ := by
+          rw [show (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))
+              = (σ (k + k₀) : ℝ) • v from rfl, norm_smul]
+          congr 1
+          rw [Real.norm_eq_abs, abs_of_pos (hσ _)]
+        rw [hnorm]
+        linarith [mul_le_mul_of_nonneg_right (hσ1 k) (norm_nonneg v)])
+    have hlim : ∀ᵐ v : EuclideanSpace ℝ (Fin n), Filter.Tendsto (fun k : ℕ =>
+        multivariateGaussianPDF n 0 C hC v *
+          weightedModulus n f (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))))
+        Filter.atTop (nhds 0) := by
+      filter_upwards with v
+      have hv0 : Filter.Tendsto (fun k : ℕ =>
+          WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ))) Filter.atTop (nhds 0) := by
+        refine Metric.tendsto_nhds.mpr fun δ hδ => ?_
+        rcases eq_or_ne v 0 with hv | hv
+        · refine Filter.Eventually.of_forall fun k => ?_
+          rw [hv, show ((0 : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ) = 0 from rfl, smul_zero,
+            show (WithLp.toLp 2 (0 : Fin n → ℝ)) = (0 : EuclideanSpace ℝ (Fin n)) from rfl,
+            dist_self]
+          exact hδ
+        · obtain ⟨N, hN⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hσ' (δ / ‖v‖)
+            (div_pos hδ (norm_pos_iff.2 hv)))
+          refine Filter.eventually_atTop.mpr ⟨N, fun k hk => ?_⟩
+          have h1 := hN k hk
+          rw [Real.dist_eq, sub_zero, abs_of_pos (hσ _)] at h1
+          rw [dist_zero_right,
+            show (WithLp.toLp 2 ((σ (k + k₀) : ℝ) • (v : Fin n → ℝ)))
+              = (σ (k + k₀) : ℝ) • v from rfl, norm_smul, Real.norm_eq_abs,
+            abs_of_pos (hσ _)]
+          calc (σ (k + k₀) : ℝ) * ‖v‖ < (δ / ‖v‖) * ‖v‖ :=
+            mul_lt_mul_of_pos_right h1 (norm_pos_iff.2 hv)
+            _ = δ := by rw [div_mul_cancel₀ _ (ne_of_gt (norm_pos_iff.2 hv))]
+      have hwm0 := hwmseq _ hv0
+      have := (tendsto_const_nhds (x := multivariateGaussianPDF n 0 C hC v)).mul hwm0
+      simpa using this
+    have hdct' := MeasureTheory.tendsto_integral_of_dominated_convergence
+      (fun v : EuclideanSpace ℝ (Fin n) =>
+        multivariateGaussianPDF n 0 C hC v *
+          ((1 + ∫ y : EuclideanSpace ℝ (Fin n), ‖y‖ * f y ∂volume) * (2 + ‖v‖)))
+      (f := fun _ => (0 : ℝ)) hFmeas hbdint hbound hlim
+    rw [integral_zero] at hdct'
+    exact hdct'
+  have hmain : Filter.Tendsto (fun k : ℕ => ∫ v : EuclideanSpace ℝ (Fin n),
+      multivariateGaussianPDF n 0 C hC v *
+        weightedModulus n f (WithLp.toLp 2 ((σ k : ℝ) • (v : Fin n → ℝ)))) Filter.atTop
+      (nhds 0) :=
+    (Filter.tendsto_add_atTop_iff_nat k₀).mp hdct
+  refine Metric.tendsto_nhds.mpr fun ε hε => ?_
+  obtain ⟨N, hN⟩ := Filter.eventually_atTop.mp (Metric.tendsto_nhds.mp hmain ε hε)
+  refine Filter.eventually_atTop.mpr ⟨N, fun k hk => ?_⟩
+  have hNk := hN k hk
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg
+    (MeasureTheory.integral_nonneg (fun v : EuclideanSpace ℝ (Fin n) => mul_nonneg
+      (le_of_lt (multivariateGaussianPDF_pos n 0 C hC v))
+      (show 0 ≤ weightedModulus n f (WithLp.toLp 2 ((σ k : ℝ) • (v : Fin n → ℝ)))
+        from MeasureTheory.integral_nonneg fun x => mul_nonneg
+          (by linarith [norm_nonneg x]) (abs_nonneg _))))] at hNk
+  have h0 : 0 ≤ ∫ x : EuclideanSpace ℝ (Fin n),
+      (1 + ‖x‖) * |f x - gaussSmoothed n f C hC (σ k) (hσ k) x| ∂volume :=
+    MeasureTheory.integral_nonneg fun x => mul_nonneg (by linarith [norm_nonneg x])
+      (abs_nonneg _)
+  rw [dist_zero_right, Real.norm_eq_abs, abs_of_nonneg h0]
+  exact lt_of_le_of_lt (hchain (σ k) (hσ k)) hNk
