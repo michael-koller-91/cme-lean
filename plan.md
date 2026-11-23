@@ -1,17 +1,8 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3, Step 5, and
-Step 6 are implemented and verified (`modulus_tendsto_integrable`,
-`weighted_modulus_tendsto_integrable`, `weightedModulus_tendsto_integrable`,
-`weighted_smoothing_integrable`, the Step 2 half-open lattice cell partition infrastructure,
-the Step 3a shifted-mollifier weighted moment & modulus bounds, the Step 3b `gmmApprox`
-definition, symmetric `gaussSmoothed_symm`, and pointwise decomposition bound
-`gmmApprox_sub_gaussSmoothed_le`, the Step 3c quantization theorem
-`gmmApprox_quantization_of_modulus_bound`, the Step 5 `isPdf_gmmApprox` +
-`gmmApprox_eq_gmmPDF` bridge, and the Step 6 diagonal sequence `gmmPriorSeq`,
-`isPdf_gmmPriorSeq`, `weighted_tendsto_gmmPriorSeq`, `hw_gmmPriorSeq`; all public and
-axiom-audited; full build green, zero `sorry`); Step 7 of Phase 2 is a planning document
-(Step 4 was made redundant by Step 3c's cell-by-cell Tonelli).
+Status: **ALL PHASES (Phases 0, 1, and 2, Steps 0–7) IMPLEMENTED AND VERIFIED** in
+`ApproximationByGMM.lean`, with all public theorems audited in `AxiomCheck.lean` (full
+build green, zero `sorry`, standard axioms `[propext, Classical.choice, Quot.sound]`).
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -549,7 +540,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3, Step 5 & Step 6 DONE; Step 7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **DONE (all Steps 0–7 implemented and axiom-audited)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -763,9 +754,15 @@ To keep compile times and `maxHeartbeats` low, Step 3 is factored into three cle
 * `hw_gmmPriorSeq`: converted real `∫` convergence to the `∫⁻ ENNReal.ofReal` form `hw`
   using `ofReal_integral_eq_lintegral_ofReal`.
 
-**Step 7 — the final corollaries (`gmm_density_weighted_L1`, `cme_uniform_balls_gmm_prior_general`).**
-Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact Phase 1
-`cme_uniform_balls_smoothed_prior` pattern).
+**Step 7 — the final corollaries (`gmm_density_weighted_L1`, `cme_uniform_balls_gmm_prior_general`) — DONE (public, axiom-audited).**
+* `gmm_density_weighted_L1`: packages `gmmPriorSeq n f C hC` together with
+  `isPdf_gmmPriorSeq`, `gmmApprox_eq_gmmPDF` (giving the explicit `gmmPDF` representation
+  with covariance `((1/(K+1)) ^ 2) • C`, `IsMixtureWeights w`, and locations bounded by
+  `((K : ℝ) + 1) * Real.sqrt (n : ℝ)`), and `hw_gmmPriorSeq`.
+* `cme_uniform_balls_gmm_prior_general`: composes `isPdf_gmmPriorSeq` + `hw_gmmPriorSeq`
+  with `cme_uniform_balls_R` to give locally uniform convergence of the conditional mean
+  estimates `cmeR m n S hS A (gmmPriorSeq n f C hC K) → cmeR m n S hS A f` on every
+  closed ball in `ℝ^m`.
 
 **Deliverables checklist:**
 * `weighted_modulus_tendsto_integrable` (Step 0) — **DONE** (together with its
@@ -786,7 +783,7 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
 * `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +
   `isPdf_gmmPriorSeq` + `weighted_tendsto_gmmPriorSeq` + `hw_gmmPriorSeq` (Step 6) — **DONE**
   (all public, axiom-audited); `gmm_density_weighted_L1` +
-  `cme_uniform_balls_gmm_prior_general` (Step 7).
+  `cme_uniform_balls_gmm_prior_general` (Step 7) — **DONE** (all public, axiom-audited).
 * `AxiomCheck.lean` audits for every new public theorem (Phase 1 convention).
 * Follow the Phase 1 file layout: public defs/lemmas in `ApproximationByGMM.lean`,
   appended in dependency order.

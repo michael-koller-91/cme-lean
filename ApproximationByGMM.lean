@@ -5,25 +5,28 @@ public import Mathlib.GroupTheory.GroupAction.DomAct.Basic
 public import Mathlib.MeasureTheory.Function.LpSpace.DomAct.Continuous
 
 /-!
-# Phase 0 of `plan.md`: Gaussian mixture priors for `cme_uniform_balls_R`
+# Phases 0–2 of `plan.md`: Gaussian mixture priors satisfy the weighted-L¹ hypothesis of `cme_uniform_balls_R`
 
 A finite Gaussian mixture with weights `w` (nonnegative, summing to one), locations `μ`,
 and common positive definite covariance `Cov` is `gmmPDF n k Cov hC w μ`. This file
-proves:
+implements all three phases of `plan.md`:
 
-* `isPdf_gmmPDF`: a finite Gaussian mixture is a pdf (`IsPdf`);
-* `integrable_norm_mul_gmmPDF`: a finite Gaussian mixture has a finite first moment, so
-  the `hfmom` hypothesis of `cme_uniform_balls_R` is automatic for GMM priors;
-* `cme_convergence_of_gmm_prior`: for a GMM prior, the *constant* sequence of priors
-  satisfies the weighted-L¹ convergence hypothesis of `cme_uniform_balls_R` (the
-  difference of the priors is identically zero), hence the conditional mean estimates
-  converge to the true CME locally uniformly (uniformly on every closed ball in `ℝ^m`).
-
-This discharges the Phase 0 deliverable of `plan.md`: the weighted-L¹ hypothesis of
-`cme_uniform_balls_R` is satisfiable by GMM priors whenever the true prior is itself a
-GMM — the operative setting of the Koller–Fesl–Turan–Utschick 2022 estimator. Phases 1
-and 2 of `plan.md` (approximating a general finite-first-moment pdf prior by GMMs) are
-future work.
+* **Phase 0**: `isPdf_gmmPDF`, `integrable_norm_mul_gmmPDF`, and
+  `cme_convergence_of_gmm_prior` — when the true prior is itself a GMM, its pdf and
+  first-moment hypotheses are automatic.
+* **Phase 1**: `gaussSmoothed`, `isPdf_gaussSmoothed`, `weighted_smoothing_tendsto_seq`,
+  `hw_smoothedPriorSeq`, and `cme_uniform_balls_smoothed_prior` — Gaussian-smoothed
+  (continuum-mixture) priors converge in weighted L¹ and yield locally uniform CME
+  convergence.
+* **Phase 2**: `modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
+  `weighted_smoothing_integrable`, the half-open lattice cell partition (`gridFinset`,
+  `cell`, `coveredBox`, `cellWeight`), `gmmApprox`, `gmmApprox_quantization_of_modulus_bound`,
+  `isPdf_gmmApprox`, `gmmApprox_eq_gmmPDF`, the diagonal sequence `gmmPriorSeq`,
+  `hw_gmmPriorSeq`, and the main theorems **`gmm_density_weighted_L1`** and
+  **`cme_uniform_balls_gmm_prior_general`** — every measurable pdf prior `f` with finite
+  first moment is approximated in weighted L¹ by a sequence of finite Gaussian mixture
+  pdfs (`gmmPDF`), and the resulting conditional mean estimates converge locally uniformly
+  on every closed ball in `ℝ^m` for arbitrary dimensions `m, n` and observation matrix `A`.
 -/
 
 open MeasureTheory Matrix Topology Filter ProbabilityTheory
@@ -6511,3 +6514,79 @@ public theorem hw_gmmPriorSeq (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
     mul_nonneg (by linarith [norm_nonneg x]) (abs_nonneg _))] at hK₀K
   rw [← hbridge K]
   exact (ENNReal.ofReal_lt_ofReal_iff hε).mpr hK₀K
+
+/-! ## Phase 2, Step 7: main GMM density theorem in weighted L¹ and CME convergence corollary
+
+We package the diagonal construction into the target theorem `gmm_density_weighted_L1`
+(every measurable pdf `f` with finite first moment is approximated in weighted L¹ by a
+sequence of finite Gaussian mixture pdfs `g K = gmmPDF …`) and compose with
+`cme_uniform_balls_R` to obtain `cme_uniform_balls_gmm_prior_general`: locally uniform
+convergence of the conditional mean estimates `cmeR … (gmmPriorSeq … K) → cmeR … f` on
+every closed ball in `ℝ^m`, for arbitrary dimensions `m, n` and observation matrix `A`. -/
+
+/-- **Theorem (GMM density in weighted L¹, `gmm_density_weighted_L1`)**:
+Let `f : EuclideanSpace ℝ (Fin n) → ℝ` be a measurable probability density function
+(`IsPdf f`) with finite first moment `Integrable (fun h => ‖h‖ * f h) volume`, and let
+`C` be any positive definite matrix (e.g., `C = 1` for isotropic Gaussians). Then there
+exists a sequence `g : ℕ → EuclideanSpace ℝ (Fin n) → ℝ` (namely `gmmPriorSeq n f C hC`)
+such that:
+1. every `g K` is a pdf (`IsPdf (g K)`);
+2. every `g K` is a **finite Gaussian mixture** (`gmmPDF`) with common covariance
+   `((1 / (K + 1)) ^ 2) • C`, nonnegative mixture weights summing to `1`
+   (`IsMixtureWeights w`), and locations bounded by `(K + 1) * √n`;
+3. `g` converges to `f` in weighted L¹ (the exact `hw` hypothesis of `cme_uniform_balls_R`):
+   `∀ ε > 0, ∃ K₀ : ℕ, ∀ K ≥ K₀,
+     ∫⁻ h, ENNReal.ofReal ((1 + ‖h‖) * |f h - g K h|) ∂volume < ENNReal.ofReal ε`. -/
+public theorem gmm_density_weighted_L1 (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hfm : Measurable f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) :
+    ∃ g : ℕ → EuclideanSpace ℝ (Fin n) → ℝ,
+      (∀ K : ℕ, IsPdf (g K)) ∧
+      (∀ K : ℕ,
+        ∃ (m : ℕ) (w : Fin m → ℝ) (μ : Fin m → Fin n → ℝ),
+          IsMixtureWeights w ∧
+          (∀ i : Fin m, ‖WithLp.toLp 2 (μ i)‖ ≤ ((K : ℝ) + 1) * Real.sqrt (n : ℝ)) ∧
+          g K = gmmPDF n m (((1 : ℝ) / ((K : ℝ) + 1)) ^ 2 • C)
+            (posDef_sq_smul hC (by positivity : (0 : ℝ) < (1 : ℝ) / ((K : ℝ) + 1))) w μ) ∧
+      (∀ ε > 0,
+        ∃ K₀ : ℕ,
+          ∀ K ≥ K₀,
+            ∫⁻ h : EuclideanSpace ℝ (Fin n),
+                ENNReal.ofReal ((1 + ‖h‖) * |f h - g K h|) ∂volume
+              < ENNReal.ofReal ε) := by
+  refine ⟨gmmPriorSeq n f C hC, isPdf_gmmPriorSeq n f hpdf C hC, ?_,
+    hw_gmmPriorSeq n f hfm hpdf hfmom C hC⟩
+  intro K
+  have hσK : (0 : ℝ) < (1 : ℝ) / ((K : ℝ) + 1) := by positivity
+  have hδK : (0 : ℝ) < (1 : ℝ) / ((K : ℝ) + 1) ^ 2 := by positivity
+  obtain ⟨m, w, μ, hw, hμ, heq⟩ :=
+    gmmApprox_eq_gmmPDF n f hpdf C hC ((1 : ℝ) / ((K : ℝ) + 1)) hσK hδK ((K + 1) ^ 3)
+  refine ⟨m, w, μ, hw, fun i => ?_, heq⟩
+  have hKp1_pos : (0 : ℝ) < (K : ℝ) + 1 := by positivity
+  have hprod : (((K + 1) ^ 3 : ℕ) : ℝ) * ((1 : ℝ) / ((K : ℝ) + 1) ^ 2) * Real.sqrt (n : ℝ)
+      = ((K : ℝ) + 1) * Real.sqrt (n : ℝ) := by
+    push_cast
+    field_simp [ne_of_gt hKp1_pos]
+  linarith [hμ i, hprod]
+
+/-- **Phase 2, Step 7 (`cme_uniform_balls_gmm_prior_general`)**:
+For any measurable pdf prior `f` with finite first moment, the conditional mean estimates
+computed from the finite Gaussian mixture priors `gmmPriorSeq n f C hC K` converge to the
+true CME `cmeR m n S hS A f` locally uniformly — uniformly on every closed ball of radius
+`r > 0` in `ℝ^m`, for arbitrary dimensions `m, n` and arbitrary observation matrix `A`
+(no invertibility or rank condition). -/
+public theorem cme_uniform_balls_gmm_prior_general (m n : ℕ) (S : Matrix (Fin m) (Fin m) ℝ)
+    (hS : S.PosDef) (A : Matrix (Fin m) (Fin n) ℝ)
+    (f : EuclideanSpace ℝ (Fin n) → ℝ) (hfm : Measurable f) (hpdf : IsPdf f)
+    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (r : ℝ) (hr : 0 < r) :
+    Tendsto
+      (fun K : ℕ =>
+        ⨆ y ∈ Metric.closedBall (0 : EuclideanSpace ℝ (Fin m)) r,
+          ENNReal.ofReal ‖cmeR m n S hS A f y -
+            cmeR m n S hS A (gmmPriorSeq n f C hC K) y‖)
+      atTop (nhds 0) :=
+  cme_uniform_balls_R m n S hS A f hpdf hfmom (gmmPriorSeq n f C hC)
+    (isPdf_gmmPriorSeq n f hpdf C hC)
+    (hw_gmmPriorSeq n f hfm hpdf hfmom C hC) r hr
