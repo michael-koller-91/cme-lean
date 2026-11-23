@@ -1,11 +1,12 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–1 are implemented
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–2 are implemented
 and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
-`weightedModulus_tendsto_integrable`, and `weighted_smoothing_integrable`, with Phase 1
-smoothing helpers generalized from `Continuous f` to `Measurable f`; all public and
-axiom-audited; full build green, zero `sorry`); Steps 2–7 of Phase 2 are planning
-documents.
+`weightedModulus_tendsto_integrable`, `weighted_smoothing_integrable`, and the half-open
+lattice cell partition infrastructure `gridFinset`, `latticeIdx`, `latticeQ`, `gridPoint`,
+`cell`, `coveredBox`, `cellWeight`, `sum_setIntegral_cell`, `compl_coveredBox_subset_norm_gt`,
+`norm_latticeQ_sub_le`, `one_sub_sum_cellWeight_eq`; all public and axiom-audited; full
+build green, zero `sorry`); Steps 3–7 of Phase 2 are planning documents.
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -543,7 +544,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–1 DONE; Steps 2–7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–2 DONE; Steps 3–7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -634,7 +635,7 @@ statement sketch):
     `weightedModulus_tendsto_integrable` and `weighted_smoothing_integrable` are audited in
     `AxiomCheck.lean`.
 
-**Step 2 — half-open lattice cell construction (no boundary edge cases).**
+**Step 2 — half-open lattice cell construction (no boundary edge cases) — DONE (public, axiom-audited).**
 * **Integer index grid & half-open cells (simplification):**
   Instead of intersecting preimages of `latticeQ` with a closed box `[-R, R]^n` (which
   causes off-by-one boundary headaches at `t_i = R` where `⌊R/δ⌋` jumps to the next cell),
@@ -649,27 +650,29 @@ statement sketch):
       WithLp.toLp 2 (fun i => δ * (k i : ℝ))`
   - `cell (δ : ℝ) (k : Fin n → ℤ) : Set (EuclideanSpace ℝ (Fin n)) :=
       {t | ∀ i : Fin n, (k i : ℝ) * δ ≤ (t : Fin n → ℝ) i ∧ (t : Fin n → ℝ) i < ((k i : ℝ) + 1) * δ}`
-    (equivalently `{t | latticeIdx δ t = k}` for `δ > 0` via `Int.floor_eq_iff`).
-* **Why this representation is smooth in Lean:**
-  1. `MeasurableSet (cell δ k)` is immediate (`Finset.measurableSet_biInter` of half-open
-     coordinate intervals `(continuous_apply i).measurable Keep preimage of Ico`).
-  2. On `t ∈ cell δ k`, `latticeQ δ t = gridPoint δ k` is immediate from `Int.floor_eq_iff`
-     (after dividing by `δ > 0`).
-  3. **Pairwise disjointness** of `cell δ k` for `k ∈ gridFinset n N` is 3 lines: if
-     `t ∈ cell δ k₁ ∩ cell δ k₂`, then `k₁ = latticeIdx δ t = k₂`.
-  4. **Covered box:** define `coveredBox (δ : ℝ) (N : ℕ) : Set (EuclideanSpace ℝ (Fin n)) :=
-     ⋃ k ∈ gridFinset n N, cell δ k`. By `Int.floor_eq_iff`, for `N * δ ≥ R`,
-     `{t | ‖t‖ ≤ R} ⊆ {t | ∀ i, |(t : Fin n → ℝ) i| < N * δ} ⊆ coveredBox δ N`, so its
-     complement `(coveredBox δ N)ᶜ` is contained in `{t | R < ‖t‖}`!
-  5. **Partition identity (`sum_setIntegral_cell`):** for any integrable `g`,
-     `∑ k ∈ gridFinset n N, ∫ t in cell δ k, g t ∂volume = ∫ t in coveredBox δ N, g t ∂volume`
-     is a single call to `MeasureTheory.integral_biUnion_finset`!
-  6. **Displacement bound (`norm_latticeQ_sub_le`):** for all `t` and `δ > 0`,
-     `‖latticeQ δ t − t‖ ≤ δ * Real.sqrt n` (from per-coordinate
-     `0 ≤ t_i - δ⌊t_i/δ⌋ < δ` via `Int.floor_le` and `Int.lt_floor_add_one`, plus
-     `EuclideanSpace.norm_eq`).
-  7. **Weights:** `cellWeight f δ k := ∫ t in cell δ k, f t ∂volume`. By the partition
-     identity, `∑ k ∈ gridFinset n N, cellWeight f δ k = ∫ t in coveredBox δ N, f t ∂volume ≤ 1`.
+    (equivalently `{t | latticeIdx δ t = k}` for `δ > 0` via `Int.floor_eq_iff`, proved as
+    `mem_cell_iff_latticeIdx`).
+* **Implemented lemmas (`ApproximationByGMM.lean`, all public):**
+  1. `measurableSet_cell` and `measurableSet_coveredBox`: via `MeasurableSet.iInter` of
+     preimages of `Set.Ico` and `Finset.measurableSet_biUnion`.
+  2. `latticeQ_eq_gridPoint_of_mem_cell`: on `t ∈ cell δ k`, `latticeQ δ t = gridPoint δ k`
+     from `mem_cell_iff_latticeIdx`.
+  3. `pairwiseDisjoint_cell`: `s.PairwiseDisjoint (cell δ)` for `0 < δ` in 6 lines via
+     `mem_cell_iff_latticeIdx`.
+  4. `coveredBox n δ N` (`⋃ k ∈ gridFinset n N, cell δ k`), `norm_lt_subset_coveredBox`,
+     and `compl_coveredBox_subset_norm_gt`: for `0 < δ` and `R < N * δ` (satisfied along
+     the Step 6 diagonal where `R = K < K + 1 = N_K * δ_K`),
+     `{t | ‖t‖ ≤ R} ⊆ coveredBox n δ N` and `(coveredBox n δ N)ᶜ ⊆ {t | R < ‖t‖}`
+     (note strict `R < N * δ` is needed at the upper half-open boundary `t_i < N * δ`).
+  5. `sum_setIntegral_cell`: for any integrable `g`,
+     `∑ k ∈ gridFinset n N, ∫ t in cell δ k, g t ∂volume = ∫ t in coveredBox n δ N, g t ∂volume`
+     via `MeasureTheory.integral_biUnion_finset`.
+  6. `norm_latticeQ_sub_le`, `norm_gridPoint_sub_le_of_mem_cell`, and
+     `norm_sub_gridPoint_le_of_mem_cell`: `‖latticeQ δ t - t‖ ≤ δ * Real.sqrt n` (and
+     consequently `‖gridPoint δ k - t‖ ≤ δ * Real.sqrt n` on `t ∈ cell δ k`).
+  7. `cellWeight f δ k`, `cellWeight_nonneg`, `sum_cellWeight`,
+     `one_sub_sum_cellWeight_eq` (`1 - ∑ W_k = ∫_{(coveredBox)ᶜ} f`), and
+     `sum_cellWeight_le_one`.
 
 **Step 3 — quantization estimate (`gmmApprox_quantization`) without `sSup` or `Q_δ` joint-integrability.**
 Define `gmmApprox (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (C : Matrix (Fin n) (Fin n) ℝ)
@@ -794,7 +797,8 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
   smoothing helpers and plugging in Step 0; both public, axiom-audited).
 * `gridFinset`, `latticeIdx`, `latticeQ`, `gridPoint`, `cell`, `coveredBox`,
   `cellWeight`, `sum_setIntegral_cell` (`integral_biUnion_finset`),
-  `norm_latticeQ_sub_le` (Step 2), and `gmmApprox_sum_eq_setIntegral` (Step 4).
+  `compl_coveredBox_subset_norm_gt`, `norm_latticeQ_sub_le`,
+  `one_sub_sum_cellWeight_eq` (Step 2) — **DONE** (all public, axiom-audited).
 * `gmmApprox` def + `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5),
   `weightedModulus_mollifier_le` + `gmmApprox_quantization_of_modulus_bound` (Step 3).
 * `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +

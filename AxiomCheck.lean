@@ -92,3 +92,27 @@ info: 'weighted_smoothing_integrable' depends on axioms: [propext, Classical.cho
 -/
 #guard_msgs in
 #print axioms weighted_smoothing_integrable
+
+/--
+info: 'sum_setIntegral_cell' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms sum_setIntegral_cell
+
+/--
+info: 'compl_coveredBox_subset_norm_gt' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms compl_coveredBox_subset_norm_gt
+
+/--
+info: 'norm_latticeQ_sub_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms norm_latticeQ_sub_le
+
+/--
+info: 'one_sub_sum_cellWeight_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms one_sub_sum_cellWeight_eq

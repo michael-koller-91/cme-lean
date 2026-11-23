@@ -4076,3 +4076,224 @@ public theorem weighted_smoothing_integrable (n : ℕ) (f : EuclideanSpace ℝ (
       (abs_nonneg _)
   rw [dist_zero_right, Real.norm_eq_abs, abs_of_nonneg h0]
   exact lt_of_le_of_lt (hchain (σ k) (hσ k)) hNk
+
+/-! ## Phase 2, Step 2: half-open lattice cell construction
+
+We discretize the box `[-Nδ, Nδ)^n` into half-open cells `cell δ k` indexed by integer
+grid vectors `k ∈ gridFinset n N = [-N, N)^n ∩ ℤ^n`. Because `cell δ k` is defined by
+`k_i * δ ≤ t_i < (k_i + 1) * δ` (equivalently `⌊t_i / δ⌋ = k_i` for `δ > 0`), the cells
+are measurably partitioned with no boundary overlap, and their union `coveredBox n δ N`
+satisfies `MeasureTheory.integral_biUnion_finset` directly. -/
+
+/-- The finite index set `[-N, N)^n ∩ ℤ^n` of integer grid vectors for a box of integer
+half-width `N : ℕ`. -/
+@[expose] public def gridFinset (n : ℕ) (N : ℕ) : Finset (Fin n → ℤ) :=
+  Fintype.piFinset (fun _ : Fin n => Finset.Ico (-(N : ℤ)) (N : ℤ))
+
+/-- Componentwise floor-index map `t ↦ (⌊t_i / δ⌋)_i`. -/
+@[expose] public noncomputable def latticeIdx {n : ℕ} (δ : ℝ) (t : EuclideanSpace ℝ (Fin n)) :
+    Fin n → ℤ :=
+  fun i => ⌊(t : Fin n → ℝ) i / δ⌋
+
+/-- Componentwise lattice floor-quantizer `Q_δ(t) = (δ * ⌊t_i / δ⌋)_i`. -/
+@[expose] public noncomputable def latticeQ {n : ℕ} (δ : ℝ) (t : EuclideanSpace ℝ (Fin n)) :
+    EuclideanSpace ℝ (Fin n) :=
+  WithLp.toLp 2 (fun i => δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ))
+
+/-- The lattice center point `x_k = (δ * k_i)_i` of cell `k : Fin n → ℤ`. -/
+@[expose] public noncomputable def gridPoint {n : ℕ} (δ : ℝ) (k : Fin n → ℤ) :
+    EuclideanSpace ℝ (Fin n) :=
+  WithLp.toLp 2 (fun i => δ * (k i : ℝ))
+
+/-- The half-open lattice cell `∏_i [k_i δ, (k_i + 1) δ)`. -/
+@[expose] public def cell {n : ℕ} (δ : ℝ) (k : Fin n → ℤ) : Set (EuclideanSpace ℝ (Fin n)) :=
+  {t | ∀ i : Fin n, (k i : ℝ) * δ ≤ (t : Fin n → ℝ) i ∧ (t : Fin n → ℝ) i < ((k i : ℝ) + 1) * δ}
+
+/-- The union of the half-open cells `cell δ k` over `k ∈ gridFinset n N`, equal to
+`[-Nδ, Nδ)^n`. -/
+@[expose] public def coveredBox (n : ℕ) (δ : ℝ) (N : ℕ) : Set (EuclideanSpace ℝ (Fin n)) :=
+  ⋃ k ∈ gridFinset n N, cell δ k
+
+/-- The prior mass on cell `k`: `W_k = ∫_{cell δ k} f(t) dt`. -/
+@[expose] public noncomputable def cellWeight {n : ℕ} (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (δ : ℝ) (k : Fin n → ℤ) : ℝ :=
+  ∫ t in cell δ k, f t ∂volume
+
+/-- Membership in `cell δ k` is equivalent to `latticeIdx δ t = k` when `0 < δ`. -/
+public theorem mem_cell_iff_latticeIdx {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    (k : Fin n → ℤ) (t : EuclideanSpace ℝ (Fin n)) :
+    t ∈ cell δ k ↔ latticeIdx δ t = k := by
+  simp only [cell, Set.mem_ofPred_eq, latticeIdx, funext_iff]
+  refine forall_congr' fun i => ?_
+  rw [Int.floor_eq_iff, le_div_iff₀ hδ, div_lt_iff₀ hδ]
+
+/-- On `t ∈ cell δ k`, the floor quantizer `latticeQ δ t` coincides with `gridPoint δ k`. -/
+public theorem latticeQ_eq_gridPoint_of_mem_cell {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    {k : Fin n → ℤ} {t : EuclideanSpace ℝ (Fin n)} (ht : t ∈ cell δ k) :
+    latticeQ δ t = gridPoint δ k := by
+  have hk := (mem_cell_iff_latticeIdx hδ k t).mp ht
+  apply WithLp.ofLp_injective
+  ext i
+  have hki : ⌊(t : Fin n → ℝ) i / δ⌋ = k i := congrFun hk i
+  show δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) = δ * (k i : ℝ)
+  rw [hki]
+
+/-- Each half-open cell `cell δ k` is measurable. -/
+public theorem measurableSet_cell {n : ℕ} (δ : ℝ) (k : Fin n → ℤ) :
+    MeasurableSet (cell δ k) := by
+  have heq : cell δ k = ⋂ i : Fin n,
+      (fun t : EuclideanSpace ℝ (Fin n) => (t : Fin n → ℝ) i) ⁻¹'
+        Set.Ico ((k i : ℝ) * δ) (((k i : ℝ) + 1) * δ) := by
+    ext t
+    simp [cell]
+  rw [heq]
+  refine MeasurableSet.iInter fun i => ?_
+  exact measurableSet_Ico.preimage (by fun_prop)
+
+/-- The covered box `coveredBox n δ N` is measurable. -/
+public theorem measurableSet_coveredBox (n : ℕ) (δ : ℝ) (N : ℕ) :
+    MeasurableSet (coveredBox n δ N) :=
+  (gridFinset n N).measurableSet_biUnion fun k _ => measurableSet_cell δ k
+
+/-- Distinct cells `cell δ k₁` and `cell δ k₂` are disjoint for `0 < δ`. -/
+public theorem pairwiseDisjoint_cell {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    (s : Set (Fin n → ℤ)) :
+    s.PairwiseDisjoint (cell δ) := by
+  intro k₁ _ k₂ _ hne
+  change Disjoint (cell δ k₁) (cell δ k₂)
+  rw [Set.disjoint_left]
+  intro t ht₁ ht₂
+  apply hne
+  rw [← (mem_cell_iff_latticeIdx hδ k₁ t).mp ht₁,
+    ← (mem_cell_iff_latticeIdx hδ k₂ t).mp ht₂]
+
+/-- **Partition identity**: the sum of cell integrals over `gridFinset n N` equals the set
+integral over `coveredBox n δ N`. -/
+public theorem sum_setIntegral_cell {n : ℕ} {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    {δ : ℝ} (hδ : 0 < δ) (N : ℕ) (g : EuclideanSpace ℝ (Fin n) → E)
+    (hg : MeasureTheory.Integrable g volume) :
+    ∑ k ∈ gridFinset n N, ∫ t in cell δ k, g t ∂volume
+      = ∫ t in coveredBox n δ N, g t ∂volume := by
+  exact (MeasureTheory.integral_biUnion_finset (gridFinset n N)
+    (fun k _ => measurableSet_cell δ k)
+    (pairwiseDisjoint_cell hδ (gridFinset n N : Set (Fin n → ℤ)))
+    (fun k _ => hg.integrableOn)).symm
+
+/-- Every point `t` with `‖t‖ < N * δ` belongs to `coveredBox n δ N` whenever `0 < δ`. -/
+public theorem norm_lt_subset_coveredBox {n : ℕ} {δ R : ℝ} {N : ℕ}
+    (hδ : 0 < δ) (hRN : R < (N : ℝ) * δ) :
+    {t : EuclideanSpace ℝ (Fin n) | ‖t‖ ≤ R} ⊆ coveredBox n δ N := by
+  intro t ht
+  have ht' : ‖t‖ ≤ R := ht
+  rw [coveredBox, Set.mem_iUnion₂]
+  refine ⟨latticeIdx δ t, ?_, (mem_cell_iff_latticeIdx hδ (latticeIdx δ t) t).mpr rfl⟩
+  rw [gridFinset, Fintype.mem_piFinset]
+  intro i
+  rw [Finset.mem_Ico]
+  have hti_abs : |(t : Fin n → ℝ) i| ≤ ‖t‖ := by
+    have h := PiLp.norm_apply_le (p := 2) t i
+    simpa [Real.norm_eq_abs] using h
+  have hti_lt : |(t : Fin n → ℝ) i| < (N : ℝ) * δ :=
+    lt_of_le_of_lt (le_trans hti_abs ht') hRN
+  have hlow : -((N : ℝ) * δ) < (t : Fin n → ℝ) i := (abs_lt.mp hti_lt).1
+  have hhigh : (t : Fin n → ℝ) i < (N : ℝ) * δ := (abs_lt.mp hti_lt).2
+  dsimp only [latticeIdx]
+  refine ⟨?_, ?_⟩
+  · rw [Int.le_floor, Int.cast_neg, Int.cast_natCast, le_div_iff₀ hδ, neg_mul]
+    exact le_of_lt hlow
+  · rw [Int.floor_lt, Int.cast_natCast, div_lt_iff₀ hδ]
+    exact hhigh
+
+/-- The complement of `coveredBox n δ N` is contained in the tail `{t | R < ‖t‖}` whenever
+`0 < δ` and `R < N * δ`. -/
+public theorem compl_coveredBox_subset_norm_gt {n : ℕ} {δ R : ℝ} {N : ℕ}
+    (hδ : 0 < δ) (hRN : R < (N : ℝ) * δ) :
+    (coveredBox n δ N)ᶜ ⊆ {t : EuclideanSpace ℝ (Fin n) | R < ‖t‖} := by
+  intro t ht
+  change R < ‖t‖
+  by_contra hle
+  exact ht (norm_lt_subset_coveredBox hδ hRN (not_lt.mp hle))
+
+/-- **Displacement bound (`norm_latticeQ_sub_le`)**: the Euclidean distance between `t` and
+its floor quantization `latticeQ δ t` is at most `δ * √n` for `0 < δ`. -/
+public theorem norm_latticeQ_sub_le {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    (t : EuclideanSpace ℝ (Fin n)) :
+    ‖latticeQ δ t - t‖ ≤ δ * Real.sqrt (n : ℝ) := by
+  have hcoord : ∀ i : Fin n, ‖(latticeQ δ t - t : EuclideanSpace ℝ (Fin n)) i‖ ≤ δ := by
+    intro i
+    change |δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) - (t : Fin n → ℝ) i| ≤ δ
+    have h1 : (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) ≤ (t : Fin n → ℝ) i / δ :=
+      Int.floor_le ((t : Fin n → ℝ) i / δ)
+    have h2 : (t : Fin n → ℝ) i / δ < (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) + 1 :=
+      Int.lt_floor_add_one ((t : Fin n → ℝ) i / δ)
+    have h1' : δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) ≤ (t : Fin n → ℝ) i := by
+      have := mul_le_mul_of_nonneg_left h1 (le_of_lt hδ)
+      rwa [mul_div_cancel₀ _ (ne_of_gt hδ)] at this
+    have h2' : (t : Fin n → ℝ) i < δ * (⌊(t : Fin n → ℝ) i / δ⌋ : ℝ) + δ := by
+      have := mul_lt_mul_of_pos_left h2 hδ
+      rwa [mul_div_cancel₀ _ (ne_of_gt hδ), mul_add, mul_one] at this
+    rw [abs_le]
+    constructor <;> linarith
+  rw [EuclideanSpace.norm_eq]
+  have hsum : ∑ i : Fin n, ‖(latticeQ δ t - t : EuclideanSpace ℝ (Fin n)) i‖ ^ 2
+      ≤ ∑ _i : Fin n, δ ^ 2 := by
+    refine Finset.sum_le_sum fun i _ => ?_
+    exact sq_le_sq.mpr (by
+      rw [abs_of_nonneg (norm_nonneg _), abs_of_pos hδ]
+      exact hcoord i)
+  have hcard : (∑ _i : Fin n, δ ^ 2) = (n : ℝ) * δ ^ 2 := by
+    simp [Finset.sum_const]
+  calc Real.sqrt (∑ i : Fin n, ‖(latticeQ δ t - t : EuclideanSpace ℝ (Fin n)) i‖ ^ 2)
+      ≤ Real.sqrt ((n : ℝ) * δ ^ 2) := by
+        rw [← hcard]
+        exact Real.sqrt_le_sqrt hsum
+    _ = Real.sqrt (n : ℝ) * Real.sqrt (δ ^ 2) :=
+        Real.sqrt_mul (Nat.cast_nonneg n) (δ ^ 2)
+    _ = δ * Real.sqrt (n : ℝ) := by
+        rw [Real.sqrt_sq (le_of_lt hδ), mul_comm]
+
+/-- For `t ∈ cell δ k`, `‖gridPoint δ k - t‖ ≤ δ * √n` and `‖t - gridPoint δ k‖ ≤ δ * √n`. -/
+public theorem norm_gridPoint_sub_le_of_mem_cell {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    {k : Fin n → ℤ} {t : EuclideanSpace ℝ (Fin n)} (ht : t ∈ cell δ k) :
+    ‖gridPoint δ k - t‖ ≤ δ * Real.sqrt (n : ℝ) := by
+  rw [← latticeQ_eq_gridPoint_of_mem_cell hδ ht]
+  exact norm_latticeQ_sub_le hδ t
+
+public theorem norm_sub_gridPoint_le_of_mem_cell {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    {k : Fin n → ℤ} {t : EuclideanSpace ℝ (Fin n)} (ht : t ∈ cell δ k) :
+    ‖t - gridPoint δ k‖ ≤ δ * Real.sqrt (n : ℝ) := by
+  rw [norm_sub_rev]
+  exact norm_gridPoint_sub_le_of_mem_cell hδ ht
+
+/-- Each cell weight `cellWeight f δ k` is nonnegative when `0 ≤ f`. -/
+public theorem cellWeight_nonneg {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ}
+    (hf0 : 0 ≤ f) (δ : ℝ) (k : Fin n → ℤ) :
+    0 ≤ cellWeight f δ k :=
+  MeasureTheory.setIntegral_nonneg (measurableSet_cell δ k) (fun t _ => hf0 t)
+
+/-- The sum of cell weights over `gridFinset n N` equals `∫ t in coveredBox n δ N, f t`. -/
+public theorem sum_cellWeight {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ}
+    (hfi : MeasureTheory.Integrable f volume) {δ : ℝ} (hδ : 0 < δ) (N : ℕ) :
+    ∑ k ∈ gridFinset n N, cellWeight f δ k
+      = ∫ t in coveredBox n δ N, f t ∂volume :=
+  sum_setIntegral_cell hδ N f hfi
+
+/-- For a pdf `f`, the sum of cell weights over `gridFinset n N` is in `[0, 1]`, and the
+residual weight `1 - ∑ k ∈ gridFinset n N, cellWeight f δ k` equals the complement integral
+`∫ t in (coveredBox n δ N)ᶜ, f t ∂volume ≥ 0`. -/
+public theorem one_sub_sum_cellWeight_eq {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ}
+    (hpdf : IsPdf f) {δ : ℝ} (hδ : 0 < δ) (N : ℕ) :
+    1 - ∑ k ∈ gridFinset n N, cellWeight f δ k
+      = ∫ t in (coveredBox n δ N)ᶜ, f t ∂volume := by
+  have hfi : MeasureTheory.Integrable f volume := integrable_of_isPdf hpdf
+  rw [sum_cellWeight hfi hδ N, ← hpdf.2,
+    ← MeasureTheory.integral_add_compl (measurableSet_coveredBox n δ N) hfi]
+  ring
+
+public theorem sum_cellWeight_le_one {n : ℕ} {f : EuclideanSpace ℝ (Fin n) → ℝ}
+    (hpdf : IsPdf f) {δ : ℝ} (hδ : 0 < δ) (N : ℕ) :
+    ∑ k ∈ gridFinset n N, cellWeight f δ k ≤ 1 := by
+  have h := one_sub_sum_cellWeight_eq hpdf hδ N
+  have hnn : 0 ≤ ∫ t in (coveredBox n δ N)ᶜ, f t ∂volume :=
+    MeasureTheory.setIntegral_nonneg (measurableSet_coveredBox n δ N).compl (fun t _ => hpdf.1 t)
+  linarith
