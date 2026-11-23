@@ -116,3 +116,45 @@ info: 'one_sub_sum_cellWeight_eq' depends on axioms: [propext, Classical.choice,
 -/
 #guard_msgs in
 #print axioms one_sub_sum_cellWeight_eq
+
+/--
+info: 'integrable_weighted_mollifier_sub' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms integrable_weighted_mollifier_sub
+
+/--
+info: 'integral_weighted_mollifier_sub_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms integral_weighted_mollifier_sub_le
+
+/--
+info: 'weighted_mollifier_shift_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms weighted_mollifier_shift_le
+
+/--
+info: 'gaussSmoothed_symm' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms gaussSmoothed_symm
+
+/--
+info: 'gmmApprox_sub_gaussSmoothed_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms gmmApprox_sub_gaussSmoothed_le
+
+/--
+info: 'integrable_joint_cell_error' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms integrable_joint_cell_error
+
+/--
+info: 'gmmApprox_quantization_of_modulus_bound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms gmmApprox_quantization_of_modulus_bound

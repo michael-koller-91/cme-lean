@@ -1,12 +1,14 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–2 are implemented
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3 are implemented
 and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
-`weightedModulus_tendsto_integrable`, `weighted_smoothing_integrable`, and the half-open
-lattice cell partition infrastructure `gridFinset`, `latticeIdx`, `latticeQ`, `gridPoint`,
-`cell`, `coveredBox`, `cellWeight`, `sum_setIntegral_cell`, `compl_coveredBox_subset_norm_gt`,
-`norm_latticeQ_sub_le`, `one_sub_sum_cellWeight_eq`; all public and axiom-audited; full
-build green, zero `sorry`); Steps 3–7 of Phase 2 are planning documents.
+`weightedModulus_tendsto_integrable`, `weighted_smoothing_integrable`, the Step 2 half-open
+lattice cell partition infrastructure, the Step 3a shifted-mollifier weighted moment &
+modulus bounds, the Step 3b `gmmApprox` definition, symmetric `gaussSmoothed_symm`, and
+pointwise decomposition bound `gmmApprox_sub_gaussSmoothed_le`, and the Step 3c
+quantization theorem `gmmApprox_quantization_of_modulus_bound`; all public and
+axiom-audited; full build green, zero `sorry`); Steps 5–7 of Phase 2 are planning
+documents (Step 4 was made redundant by Step 3c's cell-by-cell Tonelli).
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -544,7 +546,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–2 DONE; Steps 3–7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3 DONE; Steps 5–7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -674,83 +676,54 @@ statement sketch):
      `one_sub_sum_cellWeight_eq` (`1 - ∑ W_k = ∫_{(coveredBox)ᶜ} f`), and
      `sum_cellWeight_le_one`.
 
-**Step 3 — quantization estimate (`gmmApprox_quantization`) without `sSup` or `Q_δ` joint-integrability.**
-Define `gmmApprox (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (C : Matrix (Fin n) (Fin n) ℝ)
-(hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) (δ : ℝ) (N : ℕ) : EuclideanSpace ℝ (Fin n) → ℝ`:
-`fun x => (∑ k ∈ gridFinset n N, cellWeight f δ k *
-    mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ))))
-  + (1 - ∑ k ∈ gridFinset n N, cellWeight f δ k) * mollifier n C hC σ hσ x`
-(note: using `mollifier n C hC σ hσ (x − μ)` directly matches `gaussSmoothed n f C hC σ hσ`
-and works for *any* positive definite covariance `C`, including `C = 1` where
-`mollifier n 1 _ σ hσ (x − μ) = multivariateGaussianPDF n μ (σ² • 1) _ x`).
-* **Crucial formalization insight — cell-by-cell Tonelli (`Integrable.prod_mul`) eliminates `latticeQ` from joint integrability (and makes Step 4 optional!):**
-  In Bochner-integral Fubini (`MeasureTheory.integral_prod`), swapping `∫_x` and `∫_t`
-  requires proving joint `Integrable` on `volume.prod volume`. If we merged the finite
-  sum over `k ∈ gridFinset n N` into `∫_{coveredBox} f(t) ψ_σ(x − Q_δ(t)) dt` *before*
-  integrating over `x`, we would have to prove joint integrability of a two-variable
-  function involving the floor-quantizer `Q_δ(t)` (~150+ lines of `lintegral` Tonelli
-  boilerplate) and separately prove the `integral_subst` scaling for a difference of two
-  mollifiers.
-  Instead, **keep the finite sum over `k ∈ gridFinset n N` on the outside**:
-  1. For each cell `k`, write
-     `cellWeight f δ k * ψ_σ(x − x_k) − ∫ t in cell δ k, f t * ψ_σ(x − t) ∂volume
-      = ∫ t in cell δ k, f t * (ψ_σ(x − x_k) − ψ_σ(x − t)) ∂volume`
-     (since `ψ_σ(x − x_k)` is constant in `t`, via `integral_mul_const` and `integral_sub`).
-  2. Split `gaussSmoothed … x = (∑ k ∈ gridFinset n N, ∫ t in cell δ k, f t * ψ_σ(x − t))
-     + ∫ t in (coveredBox δ N)ᶜ, f t * ψ_σ(x − t)` (via `integral_add_compl` and Step 2's
-     `integral_biUnion_finset`, using the symmetric convolution rewrite
-     `gaussSmoothed … x = ∫ t, f t * ψ_σ(x − t)` from `integrable_toLp_sub`).
-  3. By the triangle inequality (`abs_add`, `Finset.abs_sum_le_sum_abs`,
-     `abs_integral_le_integral_abs`) and `integral_finsetSum`, the `x`-integral of the
-     difference splits into a finite sum over `k ∈ gridFinset n N` of cell errors plus
-     the two tail pieces (`(1 − c) * ∫ w(x) ψ_σ(x) dx` and the `(coveredBox δ N)ᶜ` tail).
-  4. **Why joint integrability on each cell `k` is now trivial:** on `cell δ k`, the
-     integrand `(t, x) ↦ (cell δ k).indicator f t * ((1 + ‖x‖) * |ψ_σ(x − x_k) − ψ_σ(x − t)|)`
-     is dominated by the sum of:
-     - `(cell δ k).indicator f t * ((1 + ‖x‖) * ψ_σ(x − x_k))`: a **separable product**
-       `g(t) * h(x)` where `x_k` is constant in `t`! Its joint integrability on
-       `volume.prod volume` is a 1-line call to `MeasureTheory.Integrable.prod_mul`!
-     - `f t * ((1 + ‖x‖) * ψ_σ(x − t))`: its joint integrability is ALREADY proven in
-       Phase 1 (`integrable_joint_smooth_prior` + coordinate change)!
-     Thus `Q_δ(t)` (`latticeQ`) NEVER appears inside any product-measure integrability
-     proof; all we need on `t ∈ cell δ k` is the coordinatewise distance bound
-     `‖t − gridPoint δ k‖ ≤ δ * Real.sqrt n`!
-* **Scaled-modulus lemma (`weightedModulus_mollifier_le`):**
-  By linear change of variables `x = σ y` (`integral_subst n 0 (σ • 1)`), for any
-  shift `s : EuclideanSpace ℝ (Fin n)`:
-  `∫ x, (1 + ‖x‖) * |mollifier n C hC σ hσ (x + s) − mollifier n C hC σ hσ x| ∂volume
-   = ∫ y, (1 + σ * ‖y‖) * |φ_C (y + σ⁻¹ • s) − φ_C y| ∂volume`
-  `≤ weightedModulus n φ_C (WithLp.toLp 2 (-(σ⁻¹ • s)))` (when `σ ≤ 1`),
-  and similarly the unweighted $L^1$ shift satisfies
-  `∫ x, |mollifier n C hC σ hσ (x + s) − mollifier n C hC σ hσ x| ∂volume
-   = ∫ y, |φ_C (y + σ⁻¹ • s) − φ_C y| ∂volume
-   ≤ weightedModulus n φ_C (WithLp.toLp 2 (-(σ⁻¹ • s)))` (since `1 ≤ 1 + ‖y‖`).
-  Notice the huge simplification: **for `σ ≤ 1`, BOTH the weighted modulus of `ψ_σ` and
-  the unweighted $L^1$ modulus of `ψ_σ` at shift `s` are bounded by the SINGLE quantity
-  `weightedModulus n φ_C (-(σ⁻¹ • s))`!** We do not even need a separate `L₁` definition
-  or `σ(2M₁ + ‖s/σ‖)` splitting!
-* **Pointwise `η`-bound instead of `sSup` (`gmmApprox_quantization_of_modulus_bound`):**
-  Since `φ_C` is a continuous pdf with finite first moment, `weighted_modulus_tendsto_seq`
-  (or Step 1b) gives `Tendsto (weightedModulus n φ_C) (nhds 0) (nhds 0)`.
-  Instead of taking `sSup` over `‖s‖ ≤ δ√n` (which requires `BddAbove` in Lean), prove
-  `gmmApprox_quantization_of_modulus_bound`:
-  > Given `η > 0`, if `∀ u, ‖u‖ ≤ δ * Real.sqrt n / σ → weightedModulus n φ_C u ≤ η`,
-  > and `σ ≤ 1`, `0 < δ`, `(K : ℝ) ≤ N * δ`, then
-  > `∫ x, (1 + ‖x‖) * |gmmApprox … x − gaussSmoothed … x| ∂volume
-  >  ≤ η * (1 + ∫ t, ‖t‖ * f t ∂volume) + 2 * (1 + M_φ) * ∫ t in {y | (K : ℝ) < ‖y‖}, (1 + ‖t‖) * f t ∂volume`.
-  Proof via the cell-by-cell decomposition above:
-  1. For each cell `k ∈ gridFinset n N`, Tonelli (`integral_prod`) swaps `∫_x` and
-     `∫_{t ∈ cell δ k}`. For each `t ∈ cell δ k`, shifting `y = x − t`
-     (`integral_toLp_trans_right`), bounding `1 + ‖y + t‖ ≤ (1 + ‖y‖) + ‖t‖`, and
-     applying `weightedModulus_mollifier_le` with `s = t − gridPoint δ k`
-     (`‖s‖ ≤ δ * Real.sqrt n`, so `‖-(σ⁻¹ • s)‖ ≤ δ * Real.sqrt n / σ`) bounds the inner
-     `x`-integral by `(1 + ‖t‖) * weightedModulus n φ_C (-(σ⁻¹ • s)) ≤ η * (1 + ‖t‖)`.
-     Integrating over `t ∈ cell δ k` and summing over `k ∈ gridFinset n N` via Step 2's
-     `sum_setIntegral_cell` gives
-     `≤ η * ∫ t in coveredBox δ N, (1 + ‖t‖) * f t ≤ η * (1 + M_f)` (R-free!).
-  2. On `(coveredBox δ N)ᶜ ⊆ {t | (K : ℝ) < ‖t‖}`, both `(1 − c) ∫ w ψ_σ` and
-     `∫_{(coveredBox)ᶜ} f(t) ∫ w(x) ψ_σ(x − t) dx dt` are bounded by
-     `(1 + σ M_φ) * ∫_{(coveredBox)ᶜ} (1 + ‖t‖) f(t) dt ≤ (1 + M_φ) * ∫_{‖t‖ > K} (1 + ‖t‖) f(t) dt`.
+**Step 3 — quantization estimate (`gmmApprox_quantization_of_modulus_bound`), split into Steps 3a, 3b, 3c.**
+To keep compile times and `maxHeartbeats` low, Step 3 is factored into three clean sub-steps:
+* **Step 3a — Mollifier scaling, weighted moments, and shifted-kernel bounds (pure Gaussian/mollifier analysis, no grid or `f`) — DONE (public, axiom-audited):**
+  1. `isPdf_mollifier`, `integrable_norm_mul_mollifier`, `integrable_weighted_mollifier`,
+     `integral_weighted_mollifier`, & `integrable_weighted_mollifier_sub`:
+     `(1 + ‖x‖) * mollifier n C hC σ hσ (x − t)` is integrable on `volume`, and
+     `integral_weighted_mollifier_sub_le`: for `0 < σ ≤ 1` and any `t`,
+     `∫ x, (1 + ‖x‖) * mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (t : Fin n → ℝ))) ∂volume
+      ≤ (1 + ‖t‖) * (1 + ∫ v, ‖v‖ * multivariateGaussianPDF n 0 C hC v ∂volume)`.
+     (Proved by shifting `y = x − t` via `integral_shift_neg`, using `1 + ‖y + t‖ ≤ (1 + ‖t‖)(1 + ‖y‖)`,
+     and scaling `y = σ v` via `integral_mollifier_mul`.)
+  2. `weighted_mollifier_shift_le` (the single combined shift bound): for `0 < σ ≤ 1` and any
+     `t, x_k : EuclideanSpace ℝ (Fin n)`,
+     `∫ x, (1 + ‖x‖) * |mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (x_k : Fin n → ℝ)))
+        - mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (t : Fin n → ℝ)))| ∂volume
+      ≤ (1 + ‖t‖) * weightedModulus n (multivariateGaussianPDF n 0 C hC)
+          (WithLp.toLp 2 ((σ : ℝ)⁻¹ • ((x_k : Fin n → ℝ) - (t : Fin n → ℝ))))`.
+     *Why this is even simpler than splitting into `w(y) + ‖t‖`:* using the multiplicative
+     weight inequality `1 + ‖y + t‖ ≤ (1 + ‖t‖)(1 + ‖y‖)` after shifting `y = x − t`
+     (`integral_shift_neg`) pulls `(1 + ‖t‖)` out as a single scalar factor and scales
+     `y = σ v` (`integral_subst` with `σ • 1`) directly into `weightedModulus n φ_C (σ⁻¹ • (x_k − t))`
+     when `σ ≤ 1`!
+* **Step 3b — `gmmApprox` definition, symmetric `gaussSmoothed`, and pointwise decomposition — DONE (public, axiom-audited):**
+  1. Defined `gmmApprox (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ) (C : Matrix (Fin n) (Fin n) ℝ)
+     (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) (δ : ℝ) (N : ℕ) : EuclideanSpace ℝ (Fin n) → ℝ`:
+     `fun x => (∑ k ∈ gridFinset n N, cellWeight f δ k *
+         mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ))))
+       + (1 - ∑ k ∈ gridFinset n N, cellWeight f δ k) * mollifier n C hC σ hσ x`.
+  2. `integral_toLp_sub`, `integrable_prior_mul_mollifier_sub`, & `gaussSmoothed_symm`:
+     rewrote `gaussSmoothed n f C hC σ hσ x = ∫ t, f t * mollifier n C hC σ hσ (x − t) ∂volume`.
+  3. `abs_cellWeight_mul_sub_setIntegral_le` & `gmmApprox_sub_gaussSmoothed_le`: pointwise
+     bound for `|gmmApprox … x − gaussSmoothed … x|` in terms of the finite sum of cell
+     integrals `∫ t in cell δ k, f t * |ψ_σ(x − x_k) − ψ_σ(x − t)|`, the residual term
+     `(1 − c) * ψ_σ(x)`, and the tail `∫ t in (coveredBox n δ N)ᶜ, f t * ψ_σ(x − t)`.
+* **Step 3c — Cell-by-cell & tail Tonelli assembly (`gmmApprox_quantization_of_modulus_bound`) — DONE (public, axiom-audited):**
+  1. `integrable_prod_mul_volume`, `integrable_joint_symm_prior`,
+     `integrable_joint_indicator_symm_prior`, & `integrable_joint_cell_error`:
+     for each cell `k ∈ gridFinset n N`, joint integrability on `volume.prod volume` follows
+     from `integrable_prod_mul_volume` (for the separable `((1 + ‖x‖) * ψ_σ(x − x_k)) * (cell δ k).indicator f t`
+     piece) plus `integrable_joint_indicator_symm_prior`;
+     `integral_weighted_cell_error_le` swaps `∫_x` and `∫_{t ∈ cell δ k}` via
+     `MeasureTheory.integral_integral_swap` and applies Step 3a's `weighted_mollifier_shift_le`
+     + Step 2's `norm_gridPoint_sub_le_of_mem_cell`.
+  2. `integral_weighted_compl_coveredBox_le` & `gmmApprox_quantization_of_modulus_bound`:
+     summing the cell bounds via Step 2's `sum_setIntegral_cell` gives `≤ η * (1 + ∫ t, ‖t‖ * f t ∂volume)`,
+     and on `(coveredBox n δ N)ᶜ ⊆ {t | R < ‖t‖}` (`R < N * δ`), combining the residual
+     origin term and the complement integral via Step 3a's `integral_weighted_mollifier_sub_le`
+     gives `≤ 2 * (1 + M_φ) * ∫ t in {y | R < ‖y‖}, (1 + ‖t‖) * f t ∂volume`.
 
 **Step 5 — `IsPdf (gmmApprox …)` and bridge to `gmmPDF` (`isPdf_gmmApprox`, `gmmApprox_eq_gmmPDF`).**
 * `isPdf_gmmApprox`: Nonnegativity from `0 ≤ cellWeight f δ k`, `1 − c ≥ 0` (since
@@ -799,8 +772,12 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
   `cellWeight`, `sum_setIntegral_cell` (`integral_biUnion_finset`),
   `compl_coveredBox_subset_norm_gt`, `norm_latticeQ_sub_le`,
   `one_sub_sum_cellWeight_eq` (Step 2) — **DONE** (all public, axiom-audited).
-* `gmmApprox` def + `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5),
-  `weightedModulus_mollifier_le` + `gmmApprox_quantization_of_modulus_bound` (Step 3).
+* `integrable_weighted_mollifier_sub`, `integral_weighted_mollifier_sub_le`,
+  `weighted_mollifier_shift_le` (Step 3a) — **DONE** (all public, axiom-audited);
+  `gmmApprox` def + `gaussSmoothed_symm` + `gmmApprox_sub_gaussSmoothed_le` (Step 3b) — **DONE**
+  (all public, axiom-audited); `gmmApprox_quantization_of_modulus_bound` (Step 3c) — **DONE**
+  (all public, axiom-audited);
+  and `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5).
 * `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +
   `hw_gmmPriorSeq` (Step 6), `gmm_density_weighted_L1` +
   `cme_uniform_balls_gmm_prior_general` (Step 7).
