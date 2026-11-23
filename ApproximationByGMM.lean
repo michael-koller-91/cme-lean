@@ -611,13 +611,12 @@ theorem measurableSet_norm_gt (n : ℕ) (r : ℝ) :
   have h : {y : EuclideanSpace ℝ (Fin n) | r < ‖y‖} =
       (Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) r)ᶜ := by
     ext x
-    simp only [Metric.mem_closedBall, dist_zero_right, not_le, Set.mem_setOf_eq,
+    simp only [Metric.mem_closedBall, dist_zero_right, not_le, Set.mem_ofPred_eq,
       Set.mem_compl_iff]
   rw [h]
   exact Metric.isClosed_closedBall.measurableSet.compl
 
 set_option maxHeartbeats 2000000 in
-set_option diagnostics true in
 /-- **Translation modulus lemma** (the `(T)`-lemma): for a continuous pdf `f` with finite first
 moment, the weighted translation modulus
 `G(u) = ∫ (1 + ‖x‖) * |f (x − u) − f x| ∂volume`
@@ -775,7 +774,7 @@ public theorem weighted_modulus_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ (F
     have hcoreBall : {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} =
         Metric.closedBall (0 : EuclideanSpace ℝ (Fin n)) ((K₁ : ℝ) + 1) := by
       ext y
-      simp only [Metric.mem_closedBall, dist_zero_right, Set.mem_setOf_eq]
+      simp only [Metric.mem_closedBall, dist_zero_right, Set.mem_ofPred_eq]
     have hmeasCore : MeasurableSet {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1} := by
       rw [hcoreBall]
       exact Metric.isClosed_closedBall.measurableSet
@@ -1102,7 +1101,7 @@ public theorem weighted_modulus_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ (F
       intro x
       rcases em (x ∈ {y : EuclideanSpace ℝ (Fin n) | ‖y‖ ≤ (K₁ : ℝ) + 1}) with hmem | hmem
       · have hmem' : ‖x‖ ≤ (K₁ : ℝ) + 1 := by
-          simpa only [Set.mem_setOf_eq] using hmem
+          simpa only [Set.mem_ofPred_eq] using hmem
         have hmem2 : x ∉ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} :=
           not_lt.mpr hmem'
         have hT1rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
@@ -1116,7 +1115,7 @@ public theorem weighted_modulus_tendsto_seq (n : ℕ) (f : EuclideanSpace ℝ (F
         linarith [abs_nonneg ((1 + ‖x‖) *
           |f (WithLp.toLp 2 ((x : Fin n → ℝ) - (u (k + k₀) : Fin n → ℝ))) - f x|)]
       · have hmem' : ¬(‖x‖ ≤ (K₁ : ℝ) + 1) := by
-          simpa only [Set.mem_setOf_eq] using hmem
+          simpa only [Set.mem_ofPred_eq] using hmem
         have hmem2 : x ∈ {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖} :=
           not_le.mp hmem'
         have hT1rw : {y : EuclideanSpace ℝ (Fin n) | (K₁ : ℝ) + 1 < ‖y‖}.indicator
@@ -1753,7 +1752,7 @@ integrand factors follows from the reflection `u ↦ −u` (measure-preserving) 
 peak domination `ψ_σ(u) ≤ ψ_σ(0)`. -/
 public theorem stepA_gaussSmoothed (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
     (hfm : Measurable f) (hpdf : IsPdf f)
-    (hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
+    (_hfmom : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) => ‖x‖ * f x) volume)
     (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (s : ℝ) (hs : 0 < s)
     (x : EuclideanSpace ℝ (Fin n)) :
     |f x - gaussSmoothed n f C hC s hs x|
@@ -3162,7 +3161,7 @@ public theorem modulus_tendsto_integrable {n : ℕ} (f : EuclideanSpace ℝ (Fin
       (nhds 0) (nhds 0) := by
   classical
   have hmem : MemLp f (1 : ℝ≥0∞) volume := memLp_one_iff_integrable.mpr hfi
-  haveI hFact : Fact ((1 : ℝ≥0∞) ≠ ⊤) := ⟨by simp⟩
+  have hFact : Fact ((1 : ℝ≥0∞) ≠ ⊤) := ⟨by simp⟩
   have hcv : ContinuousVAdd (EuclideanSpace ℝ (Fin n))ᵈᵃᵃ
       (Lp ℝ (1 : ℝ≥0∞) (volume : Measure (EuclideanSpace ℝ (Fin n)))) := inferInstance
   have hslice : Continuous (fun u : EuclideanSpace ℝ (Fin n) =>
@@ -3301,7 +3300,7 @@ public theorem weighted_modulus_tendsto_integrable {n : ℕ}
   have hAm : MeasurableSet A := by
     have hAeq : A = Bᶜ := by
       ext y
-      simp only [Set.mem_compl_iff, Set.mem_setOf_eq, hBdef, hAdef, not_lt]
+      simp only [Set.mem_compl_iff, Set.mem_ofPred_eq, hBdef, hAdef, not_lt]
     rw [hAeq]
     exact hBmeas.compl
   -- the per-`u` pieces (all in the statement's `toLp`-form, via the `coeFn` chains)
@@ -3397,7 +3396,7 @@ public theorem weighted_modulus_tendsto_integrable {n : ℕ}
   have hAm : MeasurableSet A := by
     have hAeq : A = Bᶜ := by
       ext y
-      simp only [Set.mem_compl_iff, Set.mem_setOf_eq, hBdef, hAdef, not_lt]
+      simp only [Set.mem_compl_iff, Set.mem_ofPred_eq, hBdef, hAdef, not_lt]
     rw [hAeq]
     exact hBmeas.compl
   have hB3meas : MeasurableSet {y : EuclideanSpace ℝ (Fin n) | ((K - 1 : ℕ) : ℝ) < ‖y‖} :=
