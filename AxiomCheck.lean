@@ -158,3 +158,21 @@ info: 'gmmApprox_quantization_of_modulus_bound' depends on axioms: [propext, Cla
 -/
 #guard_msgs in
 #print axioms gmmApprox_quantization_of_modulus_bound
+
+/--
+info: 'isPdf_gmmApprox' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms isPdf_gmmApprox
+
+/--
+info: 'mollifier_sub_eq_multivariateGaussianPDF' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms mollifier_sub_eq_multivariateGaussianPDF
+
+/--
+info: 'gmmApprox_eq_gmmPDF' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms gmmApprox_eq_gmmPDF

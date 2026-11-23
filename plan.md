@@ -1,14 +1,15 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3 are implemented
-and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3 and Step 5 are
+implemented and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
 `weightedModulus_tendsto_integrable`, `weighted_smoothing_integrable`, the Step 2 half-open
 lattice cell partition infrastructure, the Step 3a shifted-mollifier weighted moment &
 modulus bounds, the Step 3b `gmmApprox` definition, symmetric `gaussSmoothed_symm`, and
-pointwise decomposition bound `gmmApprox_sub_gaussSmoothed_le`, and the Step 3c
-quantization theorem `gmmApprox_quantization_of_modulus_bound`; all public and
-axiom-audited; full build green, zero `sorry`); Steps 5–7 of Phase 2 are planning
-documents (Step 4 was made redundant by Step 3c's cell-by-cell Tonelli).
+pointwise decomposition bound `gmmApprox_sub_gaussSmoothed_le`, the Step 3c quantization
+theorem `gmmApprox_quantization_of_modulus_bound`, and the Step 5 `isPdf_gmmApprox` +
+`gmmApprox_eq_gmmPDF` bridge; all public and axiom-audited; full build green, zero `sorry`);
+Steps 6–7 of Phase 2 are planning documents (Step 4 was made redundant by Step 3c's
+cell-by-cell Tonelli).
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -546,7 +547,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3 DONE; Steps 5–7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3 & Step 5 DONE; Steps 6–7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -725,19 +726,20 @@ To keep compile times and `maxHeartbeats` low, Step 3 is factored into three cle
      origin term and the complement integral via Step 3a's `integral_weighted_mollifier_sub_le`
      gives `≤ 2 * (1 + M_φ) * ∫ t in {y | R < ‖y‖}, (1 + ‖t‖) * f t ∂volume`.
 
-**Step 5 — `IsPdf (gmmApprox …)` and bridge to `gmmPDF` (`isPdf_gmmApprox`, `gmmApprox_eq_gmmPDF`).**
-* `isPdf_gmmApprox`: Nonnegativity from `0 ≤ cellWeight f δ k`, `1 − c ≥ 0` (since
+**Step 5 — `IsPdf (gmmApprox …)` and bridge to `gmmPDF` (`isPdf_gmmApprox`, `gmmApprox_eq_gmmPDF`) — DONE (public, axiom-audited).**
+* `integrable_mollifier_sub`, `integral_mollifier_sub`, & `isPdf_gmmApprox`:
+  Nonnegativity from `0 ≤ cellWeight f δ k`, `1 − c ≥ 0` (since
   `c = ∫_{coveredBox} f ≤ ∫ f = 1`), and `0 ≤ mollifier`. Mass `= 1` from
-  `integral_add`, `integral_finsetSum`, `integral_const_mul`, `integral_mollifier` (`= 1`),
+  `integral_add`, `integral_finsetSum`, `integral_const_mul`, `integral_mollifier_sub` (`= 1`),
   and `c + (1 − c) = 1`.
-* **Syntactic bridge to `gmmPDF` (Goal 2):**
-  To satisfy Goal (2) literally (`g K = gmmPDF n m (σ_K² • C) _ w μ`), note that
-  `mollifier n C hC σ hσ (x − μ) = multivariateGaussianPDF n μ (σ² • C) _ x`
-  (by `multivariateGaussianPDF_eq` and `det`/`inv` scaling of `σ² • C`), and any
-  `Finset`-sum `∑ k ∈ S, W_k * φ(x − μ_k) + (1 − ∑ W_k) * φ(x − 0)` can be re-indexed
-  via `S.equivFin` onto `Fin (S.card + 1)` (`Fin.sum_univ_castSucc`), putting the
-  residual weight `1 − c` at `Fin.last S.card` with location `0`. This 25-line bridge
-  gives an exact `gmmPDF` witness without complicating Steps 3–6!
+* **Syntactic bridge to `gmmPDF` (Goal 2) (`posDef_sq_smul`, `mollifier_sub_eq_multivariateGaussianPDF`, `norm_gridPoint_le_of_mem_gridFinset`, `gmmApprox_eq_gmmPDF`):**
+  To satisfy Goal (2) literally (`g K = gmmPDF n m (σ_K² • C) _ w μ`), proved that
+  `mollifier n C hC σ hσ (x − μ) = multivariateGaussianPDF n μ ((σ ^ 2) • C) (posDef_sq_smul hC hσ) x`
+  (by `multivariateGaussianPDF_eq` and `det`/`inv` scaling of `(σ ^ 2) • C`), and re-indexed
+  `∑ k ∈ S, W_k * φ(x − μ_k) + (1 − ∑ W_k) * φ(x − 0)` via `S.equivFin` and `Fin.snoc`
+  onto `Fin (S.card + 1)` (`Fin.sum_univ_castSucc`), putting the residual weight `1 − c`
+  at `Fin.last S.card` with location `0`, and bounding all locations by
+  `‖WithLp.toLp 2 (μ i)‖ ≤ (N : ℝ) * δ * Real.sqrt (n : ℝ)`.
 
 **Step 6 — the explicit diagonal sequence (`gmmPriorSeq`) and `hw`.**
 * Choose the explicit parameters at index `K : ℕ`:
@@ -777,7 +779,7 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
   `gmmApprox` def + `gaussSmoothed_symm` + `gmmApprox_sub_gaussSmoothed_le` (Step 3b) — **DONE**
   (all public, axiom-audited); `gmmApprox_quantization_of_modulus_bound` (Step 3c) — **DONE**
   (all public, axiom-audited);
-  and `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5).
+  and `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5) — **DONE** (all public, axiom-audited).
 * `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +
   `hw_gmmPriorSeq` (Step 6), `gmm_density_weighted_L1` +
   `cme_uniform_balls_gmm_prior_general` (Step 7).

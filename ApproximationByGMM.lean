@@ -5866,3 +5866,235 @@ public theorem gmmApprox_quantization_of_modulus_bound (n : ℕ)
     le_trans (integral_weighted_compl_coveredBox_le n f hfm hpdf hfmom C hC σ hσ hσ1 δ N)
       (mul_le_mul_of_nonneg_left hcompl_sub_tail (by linarith))
   linarith [hsum_cells_le, hres_le, htail_le]
+
+/-! ## Phase 2, Step 5: `IsPdf (gmmApprox …)` and syntactic bridge to `gmmPDF`
+
+We show that `gmmApprox n f C hC σ hσ δ N` is a probability density function (`IsPdf`),
+and that it can be written literally as a `gmmPDF` with `(gridFinset n N).card + 1`
+components, common covariance `(σ ^ 2) • C`, mixture weights `w` satisfying
+`IsMixtureWeights w`, and locations uniformly bounded by `N * δ * √n`. -/
+
+/-- For any shift `μ`, `x ↦ mollifier n C hC σ hσ (x - μ)` is integrable on `volume`
+and integrates to `1`. -/
+public theorem integrable_mollifier_sub (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ)
+    (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) (μ : Fin n → ℝ) :
+    MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+      mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - μ))) volume :=
+  integrable_toLp_shift n (-μ) (mollifier n C hC σ hσ)
+    (mollifier_integrable n C hC σ hσ) (measurable_mollifier n C hC σ hσ)
+
+public theorem integral_mollifier_sub (n : ℕ) (C : Matrix (Fin n) (Fin n) ℝ)
+    (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ) (μ : Fin n → ℝ) :
+    ∫ x : EuclideanSpace ℝ (Fin n),
+        mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - μ)) ∂volume
+      = 1 := by
+  rw [integral_shift_neg n μ (mollifier n C hC σ hσ)
+    (measurable_mollifier n C hC σ hσ).aestronglyMeasurable,
+    integral_mollifier n C hC σ hσ]
+
+/-- **Phase 2, Step 5 (`isPdf_gmmApprox`)**: the finite Gaussian mixture approximation
+`gmmApprox n f C hC σ hσ δ N` is a pdf (`IsPdf`) whenever `IsPdf f` and `0 < δ`. -/
+public theorem isPdf_gmmApprox (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hpdf : IsPdf f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (hσ : 0 < σ) {δ : ℝ} (hδ : 0 < δ) (N : ℕ) :
+    IsPdf (gmmApprox n f C hC σ hσ δ N) := by
+  refine ⟨fun x => ?_, ?_⟩
+  · unfold gmmApprox
+    refine add_nonneg (Finset.sum_nonneg fun k _ => ?_) ?_
+    · exact mul_nonneg (cellWeight_nonneg hpdf.1 δ k) (mollifier_nonneg n C hC σ hσ _)
+    · exact mul_nonneg (sub_nonneg.mpr (sum_cellWeight_le_one hpdf hδ N))
+        (mollifier_nonneg n C hC σ hσ x)
+  · unfold gmmApprox
+    have hcell_int : ∀ k : Fin n → ℤ,
+        MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+          cellWeight f δ k *
+            mollifier n C hC σ hσ
+              (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ)))) volume :=
+      fun k => (integrable_mollifier_sub n C hC σ hσ (gridPoint δ k : Fin n → ℝ)).const_mul _
+    have hsum_int : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        ∑ k ∈ gridFinset n N,
+          cellWeight f δ k *
+            mollifier n C hC σ hσ
+              (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ)))) volume :=
+      MeasureTheory.integrable_finsetSum (gridFinset n N) (fun k _ => hcell_int k)
+    have hres_int : MeasureTheory.Integrable (fun x : EuclideanSpace ℝ (Fin n) =>
+        (1 - ∑ k ∈ gridFinset n N, cellWeight f δ k) * mollifier n C hC σ hσ x) volume :=
+      (mollifier_integrable n C hC σ hσ).const_mul _
+    rw [MeasureTheory.integral_add hsum_int hres_int,
+      MeasureTheory.integral_finsetSum (gridFinset n N) (fun k _ => hcell_int k),
+      MeasureTheory.integral_const_mul, integral_mollifier n C hC σ hσ, mul_one]
+    have hsum_eq : (∑ k ∈ gridFinset n N,
+        ∫ x : EuclideanSpace ℝ (Fin n),
+          cellWeight f δ k *
+            mollifier n C hC σ hσ
+              (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ))) ∂volume)
+      = ∑ k ∈ gridFinset n N, cellWeight f δ k := by
+      refine Finset.sum_congr rfl fun k _ => ?_
+      rw [MeasureTheory.integral_const_mul, integral_mollifier_sub n C hC σ hσ, mul_one]
+    rw [hsum_eq, add_sub_cancel]
+
+/-- Scaling a positive definite matrix `C` by `σ ^ 2` (`0 < σ`) preserves `PosDef`. -/
+public theorem posDef_sq_smul {n : ℕ} {C : Matrix (Fin n) (Fin n) ℝ} (hC : C.PosDef)
+    {σ : ℝ} (hσ : 0 < σ) : ((σ ^ 2) • C).PosDef :=
+  hC.smul (sq_pos_of_pos hσ)
+
+/-- A shifted mollifier `mollifier n C hC σ hσ (x - μ)` is identically equal to
+`multivariateGaussianPDF n μ ((σ ^ 2) • C) (posDef_sq_smul hC hσ) x`. -/
+public theorem mollifier_sub_eq_multivariateGaussianPDF (n : ℕ)
+    (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef) (σ : ℝ) (hσ : 0 < σ)
+    (μ : Fin n → ℝ) (x : EuclideanSpace ℝ (Fin n)) :
+    mollifier n C hC σ hσ (WithLp.toLp 2 ((x : Fin n → ℝ) - μ))
+      = multivariateGaussianPDF n μ ((σ ^ 2) • C) (posDef_sq_smul hC hσ) x := by
+  rw [mollifier, multivariateGaussianPDF_eq, multivariateGaussianPDF_eq]
+  have hσ2_pos : 0 < σ ^ 2 := sq_pos_of_pos hσ
+  have hσ2_unit : IsUnit (σ ^ 2) := Ne.isUnit (ne_of_gt hσ2_pos)
+  -- 1. Match the normalization constants
+  have hdet : ((σ ^ 2) • C).det = (σ ^ n) ^ 2 * C.det := by
+    rw [Matrix.det_smul, Fintype.card_fin]
+    congr 1
+    ring
+  have hsqrt : Real.sqrt (((σ ^ 2) • C).det) = σ ^ n * Real.sqrt C.det := by
+    rw [hdet, Real.sqrt_mul (sq_nonneg (σ ^ n)),
+      Real.sqrt_sq (le_of_lt (pow_pos hσ n))]
+  have hnorm : (σ : ℝ)⁻¹ ^ n *
+        ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt C.det)⁻¹
+      = ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt (((σ ^ 2) • C).det))⁻¹ := by
+    rw [hsqrt, inv_pow, ← mul_inv]
+    congr 1
+    ring
+  -- 2. Match the quadratic forms in the exponent
+  have hinv : ((σ ^ 2) • C)⁻¹ = (σ ^ 2)⁻¹ • C⁻¹ := by
+    have hCU : IsUnit C.det := Ne.isUnit (ne_of_gt hC.det_pos)
+    have hright : ((σ ^ 2) • C) * ((σ ^ 2)⁻¹ • C⁻¹) = 1 := by
+      rw [Matrix.mul_smul, Matrix.smul_mul, Matrix.mul_nonsing_inv C hCU,
+        smul_smul, inv_mul_cancel₀ (ne_of_gt hσ2_pos), one_smul]
+    exact Matrix.inv_eq_right_inv hright
+  have hquad :
+      (C⁻¹ *ᵥ (((WithLp.toLp 2 ((σ : ℝ)⁻¹ •
+        ((WithLp.toLp 2 ((x : Fin n → ℝ) - μ) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)) :
+          EuclideanSpace ℝ (Fin n)) : Fin n → ℝ) - 0)) ⬝ᵥ
+        (((WithLp.toLp 2 ((σ : ℝ)⁻¹ •
+          ((WithLp.toLp 2 ((x : Fin n → ℝ) - μ) : EuclideanSpace ℝ (Fin n)) : Fin n → ℝ)) :
+            EuclideanSpace ℝ (Fin n)) : Fin n → ℝ) - 0)
+      = (((σ ^ 2) • C)⁻¹ *ᵥ ((x : Fin n → ℝ) - μ)) ⬝ᵥ ((x : Fin n → ℝ) - μ) := by
+    change (C⁻¹ *ᵥ (σ⁻¹ • ((x : Fin n → ℝ) - μ) - 0)) ⬝ᵥ (σ⁻¹ • ((x : Fin n → ℝ) - μ) - 0)
+      = (((σ ^ 2) • C)⁻¹ *ᵥ ((x : Fin n → ℝ) - μ)) ⬝ᵥ ((x : Fin n → ℝ) - μ)
+    rw [sub_zero, hinv, Matrix.mulVec_smul, Matrix.smul_mulVec,
+      smul_dotProduct, dotProduct_smul, smul_dotProduct, smul_smul, sq, mul_inv]
+  rw [← mul_assoc, hnorm, hquad]
+
+/-- Every grid point `gridPoint δ k` for `k ∈ gridFinset n N` has norm at most `N * δ * √n`
+when `0 < δ`. -/
+public theorem norm_gridPoint_le_of_mem_gridFinset {n : ℕ} {δ : ℝ} (hδ : 0 < δ)
+    {N : ℕ} {k : Fin n → ℤ} (hk : k ∈ gridFinset n N) :
+    ‖gridPoint δ k‖ ≤ (N : ℝ) * δ * Real.sqrt (n : ℝ) := by
+  rw [gridFinset, Fintype.mem_piFinset] at hk
+  have hcoord : ∀ i : Fin n, ‖(gridPoint δ k : EuclideanSpace ℝ (Fin n)) i‖ ≤ (N : ℝ) * δ := by
+    intro i
+    have hi := Finset.mem_Ico.mp (hk i)
+    change |δ * (k i : ℝ)| ≤ (N : ℝ) * δ
+    rw [abs_mul, abs_of_pos hδ, mul_comm]
+    refine mul_le_mul_of_nonneg_right ?_ (le_of_lt hδ)
+    rw [abs_le]
+    refine ⟨?_, ?_⟩
+    · exact_mod_cast hi.1
+    · exact_mod_cast le_of_lt hi.2
+  rw [EuclideanSpace.norm_eq]
+  have hsum : ∑ i : Fin n, ‖(gridPoint δ k : EuclideanSpace ℝ (Fin n)) i‖ ^ 2
+      ≤ ∑ _i : Fin n, ((N : ℝ) * δ) ^ 2 := by
+    refine Finset.sum_le_sum fun i _ => ?_
+    exact sq_le_sq.mpr (by
+      rw [abs_of_nonneg (norm_nonneg _), abs_of_nonneg (mul_nonneg (Nat.cast_nonneg N) (le_of_lt hδ))]
+      exact hcoord i)
+  have hcard : (∑ _i : Fin n, ((N : ℝ) * δ) ^ 2) = (n : ℝ) * ((N : ℝ) * δ) ^ 2 := by
+    simp [Finset.sum_const]
+  calc Real.sqrt (∑ i : Fin n, ‖(gridPoint δ k : EuclideanSpace ℝ (Fin n)) i‖ ^ 2)
+      ≤ Real.sqrt ((n : ℝ) * ((N : ℝ) * δ) ^ 2) := by
+        rw [← hcard]
+        exact Real.sqrt_le_sqrt hsum
+    _ = Real.sqrt (n : ℝ) * Real.sqrt (((N : ℝ) * δ) ^ 2) :=
+        Real.sqrt_mul (Nat.cast_nonneg n) _
+    _ = (N : ℝ) * δ * Real.sqrt (n : ℝ) := by
+        rw [Real.sqrt_sq (mul_nonneg (Nat.cast_nonneg N) (le_of_lt hδ)), mul_comm]
+
+/-- **Phase 2, Step 5 (`gmmApprox_eq_gmmPDF`)**: `gmmApprox n f C hC σ hσ δ N` is
+syntactically equal to `gmmPDF n ((gridFinset n N).card + 1) ((σ ^ 2) • C) (posDef_sq_smul hC hσ) w μ`
+for mixture weights `w` satisfying `IsMixtureWeights w` and locations `μ` bounded in norm
+by `N * δ * √n`. -/
+public theorem gmmApprox_eq_gmmPDF (n : ℕ) (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    (hpdf : IsPdf f) (C : Matrix (Fin n) (Fin n) ℝ) (hC : C.PosDef)
+    (σ : ℝ) (hσ : 0 < σ) {δ : ℝ} (hδ : 0 < δ) (N : ℕ) :
+    ∃ (m : ℕ) (w : Fin m → ℝ) (μ : Fin m → Fin n → ℝ),
+      IsMixtureWeights w ∧
+      (∀ i : Fin m, ‖WithLp.toLp 2 (μ i)‖ ≤ (N : ℝ) * δ * Real.sqrt (n : ℝ)) ∧
+      gmmApprox n f C hC σ hσ δ N =
+        gmmPDF n m ((σ ^ 2) • C) (posDef_sq_smul hC hσ) w μ := by
+  classical
+  let S := gridFinset n N
+  let e : S ≃ Fin S.card := S.equivFin
+  let w : Fin (S.card + 1) → ℝ :=
+    Fin.snoc (fun i : Fin S.card => cellWeight f δ (e.symm i).1)
+      (1 - ∑ k ∈ S, cellWeight f δ k)
+  let μ : Fin (S.card + 1) → Fin n → ℝ :=
+    Fin.snoc (fun i : Fin S.card => (gridPoint δ (e.symm i).1 : Fin n → ℝ)) 0
+  refine ⟨S.card + 1, w, μ, ?_, ?_, ?_⟩
+  · -- `IsMixtureWeights w`
+    refine ⟨fun j => ?_, ?_⟩
+    · refine Fin.lastCases ?_ (fun i => ?_) j
+      · dsimp only [w]
+        rw [Fin.snoc_last]
+        exact sub_nonneg.mpr (sum_cellWeight_le_one hpdf hδ N)
+      · dsimp only [w]
+        rw [Fin.snoc_castSucc]
+        exact cellWeight_nonneg hpdf.1 δ _
+    · rw [Fin.sum_univ_castSucc]
+      dsimp only [w]
+      simp only [Fin.snoc_castSucc, Fin.snoc_last]
+      have hsum_e : (∑ i : Fin S.card, cellWeight f δ (e.symm i).1)
+          = ∑ k ∈ S, cellWeight f δ k := by
+        rw [← e.sum_comp (fun i : Fin S.card => cellWeight f δ (e.symm i).1)]
+        simp only [Equiv.symm_apply_apply]
+        exact Finset.sum_attach S (fun k => cellWeight f δ k)
+      rw [hsum_e, add_sub_cancel]
+  · -- Norm bound on locations `μ j`
+    intro j
+    refine Fin.lastCases ?_ (fun i => ?_) j
+    · dsimp only [μ]
+      rw [Fin.snoc_last,
+        show (WithLp.toLp 2 (0 : Fin n → ℝ) : EuclideanSpace ℝ (Fin n)) = 0 from rfl,
+        norm_zero]
+      exact mul_nonneg (mul_nonneg (Nat.cast_nonneg N) (le_of_lt hδ)) (Real.sqrt_nonneg _)
+    · dsimp only [μ]
+      rw [Fin.snoc_castSucc, WithLp.toLp_ofLp]
+      exact norm_gridPoint_le_of_mem_gridFinset hδ (e.symm i).2
+  · -- Function equality `gmmApprox = gmmPDF`
+    funext x
+    unfold gmmApprox gmmPDF
+    rw [Fin.sum_univ_castSucc]
+    dsimp only [w, μ]
+    simp only [Fin.snoc_castSucc, Fin.snoc_last]
+    congr 1
+    · have hsum_e :
+        (∑ i : Fin S.card,
+          cellWeight f δ (e.symm i).1 *
+            multivariateGaussianPDF n (gridPoint δ (e.symm i).1 : Fin n → ℝ)
+              ((σ ^ 2) • C) (posDef_sq_smul hC hσ) x)
+        = ∑ k ∈ S,
+          cellWeight f δ k *
+            mollifier n C hC σ hσ
+              (WithLp.toLp 2 ((x : Fin n → ℝ) - (gridPoint δ k : Fin n → ℝ))) := by
+        rw [← e.sum_comp]
+        simp only [Equiv.symm_apply_apply]
+        have hattach := Finset.sum_attach S (fun k =>
+          cellWeight f δ k *
+            multivariateGaussianPDF n (gridPoint δ k : Fin n → ℝ)
+              ((σ ^ 2) • C) (posDef_sq_smul hC hσ) x)
+        refine hattach.trans ?_
+        refine Finset.sum_congr rfl fun k _ => ?_
+        rw [mollifier_sub_eq_multivariateGaussianPDF]
+      exact hsum_e.symm
+    · congr 1
+      have h0 : x = WithLp.toLp 2 ((x : Fin n → ℝ) - (0 : Fin n → ℝ)) := by
+        rw [sub_zero, WithLp.toLp_ofLp]
+      conv_lhs => rw [h0]
+      exact mollifier_sub_eq_multivariateGaussianPDF n C hC σ hσ 0 x
