@@ -1,15 +1,17 @@
 # Plan: Gaussian mixture priors satisfy the weighted-L¹ convergence hypothesis
 
-Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3 and Step 5 are
-implemented and verified (`modulus_tendsto_integrable`, `weighted_modulus_tendsto_integrable`,
-`weightedModulus_tendsto_integrable`, `weighted_smoothing_integrable`, the Step 2 half-open
-lattice cell partition infrastructure, the Step 3a shifted-mollifier weighted moment &
-modulus bounds, the Step 3b `gmmApprox` definition, symmetric `gaussSmoothed_symm`, and
-pointwise decomposition bound `gmmApprox_sub_gaussSmoothed_le`, the Step 3c quantization
-theorem `gmmApprox_quantization_of_modulus_bound`, and the Step 5 `isPdf_gmmApprox` +
-`gmmApprox_eq_gmmPDF` bridge; all public and axiom-audited; full build green, zero `sorry`);
-Steps 6–7 of Phase 2 are planning documents (Step 4 was made redundant by Step 3c's
-cell-by-cell Tonelli).
+Status: Phases 0–1 implemented and verified (see below); Phase 2 Steps 0–3, Step 5, and
+Step 6 are implemented and verified (`modulus_tendsto_integrable`,
+`weighted_modulus_tendsto_integrable`, `weightedModulus_tendsto_integrable`,
+`weighted_smoothing_integrable`, the Step 2 half-open lattice cell partition infrastructure,
+the Step 3a shifted-mollifier weighted moment & modulus bounds, the Step 3b `gmmApprox`
+definition, symmetric `gaussSmoothed_symm`, and pointwise decomposition bound
+`gmmApprox_sub_gaussSmoothed_le`, the Step 3c quantization theorem
+`gmmApprox_quantization_of_modulus_bound`, the Step 5 `isPdf_gmmApprox` +
+`gmmApprox_eq_gmmPDF` bridge, and the Step 6 diagonal sequence `gmmPriorSeq`,
+`isPdf_gmmPriorSeq`, `weighted_tendsto_gmmPriorSeq`, `hw_gmmPriorSeq`; all public and
+axiom-audited; full build green, zero `sorry`); Step 7 of Phase 2 is a planning document
+(Step 4 was made redundant by Step 3c's cell-by-cell Tonelli).
 
 **Correction round (latest session, after the Step-0 build).** A review pass found and
 fixed real mathematical defects in this document (the code was unaffected — Step 0 was
@@ -547,7 +549,7 @@ Limitation: `f ⋆ φ_σ` is an integral against a continuum of components — a
 for the theory (the CME integrals still make sense) but not an implementable finite
 mixture.
 
-### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3 & Step 5 DONE; Steps 6–7 PLANNED (execution-level breakdown below)**
+### Phase 2 — finite GMMs (the target; ~500–800 lines) — **Steps 0–3, Step 5 & Step 6 DONE; Step 7 PLANNED (execution-level breakdown below)**
 
 The smoothing–quantization construction above, decomposed into ordered steps. Everything
 listed as reused is public, compiling, and axiom-clean (Phase 1 state). Mathematical
@@ -741,24 +743,25 @@ To keep compile times and `maxHeartbeats` low, Step 3 is factored into three cle
   at `Fin.last S.card` with location `0`, and bounding all locations by
   `‖WithLp.toLp 2 (μ i)‖ ≤ (N : ℝ) * δ * Real.sqrt (n : ℝ)`.
 
-**Step 6 — the explicit diagonal sequence (`gmmPriorSeq`) and `hw`.**
-* Choose the explicit parameters at index `K : ℕ`:
+**Step 6 — the explicit diagonal sequence (`gmmPriorSeq`) and `hw` — DONE (public, axiom-audited).**
+* Defined `gmmPriorSeq n f C hC K` with explicit parameters at index `K : ℕ`:
   - `σ_K := 1 / ((K : ℝ) + 1)` (`0 < σ_K ≤ 1`, `σ_K → 0`)
   - `δ_K := 1 / ((K : ℝ) + 1) ^ 2` (`δ_K / σ_K = σ_K → 0`)
-  - `N_K := (K + 1) ^ 3` (so `N_K * δ_K = K + 1 ≥ K`, ensuring
-    `(coveredBox δ_K N_K)ᶜ ⊆ {t | (K : ℝ) < ‖t‖}` without needing `Nat.ceil`!).
-  *(Choosing `N_K = (K + 1)^3` so that `N_K * δ_K = K + 1` is an exact algebraic identity
-  completely eliminates `Nat.ceil` from the formalization!)*
-* Triangle inequality:
-  `∫ w |f − gmmPriorSeq K| ≤ ∫ w |f − gaussSmoothed K| + ∫ w |gaussSmoothed K − gmmPriorSeq K|`.
+  - `N_K := (K + 1) ^ 3` (so `N_K * δ_K = K + 1 > K`, ensuring
+    `(coveredBox n δ_K N_K)ᶜ ⊆ {t | (K : ℝ) < ‖t‖}` without needing `Nat.ceil`!).
+  - `isPdf_gmmPriorSeq`, `integrable_weighted_gmmApprox`,
+    `integrable_weighted_abs_gmmApprox_sub_gaussSmoothed`, and
+    `integrable_weighted_abs_diff_gmmApprox`.
+* Triangle inequality (`weighted_quantization_tendsto_gmmPriorSeq` & `weighted_tendsto_gmmPriorSeq`):
+  `∫ w |f − gmmPriorSeq K| ≤ ∫ w |f − smoothedPriorSeq K| + ∫ w |gmmPriorSeq K − smoothedPriorSeq K|`.
   - First term `→ 0` by Step 1 (`weighted_smoothing_integrable`).
-  - Second term `→ 0` by Step 3 (`gmmApprox_quantization_of_modulus_bound`): given `ε > 0`,
-    pick `η = ε / (4 * (1 + M_f))` to get radius `r > 0` from continuity of
-    `weightedModulus n φ_C` at `0`; for large `K`, `δ_K * √n / σ_K = √n / (K + 1) < r`
-    and the tail `2 * (1 + M_φ) * ∫_{‖t‖ > K} (1 + ‖t‖) f(t) < ε / 2` by
-    `setIntegral_tail_tendsto`.
-* Convert real `∫` convergence to the `∫⁻ ENNReal.ofReal` form `hw` using
-  `ofReal_integral_eq_lintegral_ofReal` (exact Phase 1 `hw_smoothedPriorSeq` pattern).
+  - Second term `→ 0` by Step 3c (`gmmApprox_quantization_of_modulus_bound`): given `ε > 0`,
+    picked `η = ε / (2 * (1 + M_f))` to get radius `r > 0` from continuity of
+    `weightedModulus n φ_C` at `0` (`weightedModulus_tendsto_integrable`); for large `K`,
+    `δ_K * √n / σ_K = √n / (K + 1) < r` and the tail
+    `2 * (1 + M_φ) * ∫_{‖t‖ > K} (1 + ‖t‖) f(t) < ε / 2` by `setIntegral_tail_tendsto`.
+* `hw_gmmPriorSeq`: converted real `∫` convergence to the `∫⁻ ENNReal.ofReal` form `hw`
+  using `ofReal_integral_eq_lintegral_ofReal`.
 
 **Step 7 — the final corollaries (`gmm_density_weighted_L1`, `cme_uniform_balls_gmm_prior_general`).**
 Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact Phase 1
@@ -781,7 +784,8 @@ Compose `isPdf_gmmApprox` + `hw_gmmPriorSeq` with `cme_uniform_balls_R` (exact P
   (all public, axiom-audited);
   and `isPdf_gmmApprox` + `gmmApprox_eq_gmmPDF` (Step 5) — **DONE** (all public, axiom-audited).
 * `gmmPriorSeq` (with `σ_K = 1/(K+1)`, `δ_K = 1/(K+1)²`, `N_K = (K+1)³`) +
-  `hw_gmmPriorSeq` (Step 6), `gmm_density_weighted_L1` +
+  `isPdf_gmmPriorSeq` + `weighted_tendsto_gmmPriorSeq` + `hw_gmmPriorSeq` (Step 6) — **DONE**
+  (all public, axiom-audited); `gmm_density_weighted_L1` +
   `cme_uniform_balls_gmm_prior_general` (Step 7).
 * `AxiomCheck.lean` audits for every new public theorem (Phase 1 convention).
 * Follow the Phase 1 file layout: public defs/lemmas in `ApproximationByGMM.lean`,
