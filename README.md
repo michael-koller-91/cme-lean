@@ -115,6 +115,42 @@ theorem cme_uniform_balls_R
       atTop (nhds 0)
 ```
 
+The motivation for the general matrices result comes from `gmm_density_weighted_L1` in [ApproximationByGMM.lean](./ApproximationByGMM.lean).
+```Lean
+theorem gmm_density_weighted_L1
+    -- Let n be a natural number.
+    (n : ℕ)
+    -- Let f be a function from ℝ^n to ℝ.
+    (f : EuclideanSpace ℝ (Fin n) → ℝ)
+    -- Let f be measurable.
+    (hfm : Measurable f)
+    -- Let f be a PDF.
+    (hpdf : IsPdf f)
+    -- Let f have finite first moment.
+    (hfmom : MeasureTheory.Integrable (fun h : EuclideanSpace ℝ (Fin n) => ‖h‖ * f h) volume)
+    -- Let C be a matrix in ℝ^{n × n}.
+    (C : Matrix (Fin n) (Fin n) ℝ)
+    -- Let C be positive definite.
+    (hC : C.PosDef) :
+    -- Then there exists a sequence of GMMs which converges to f in the weighted L¹ sense:
+    ∃ g : ℕ → EuclideanSpace ℝ (Fin n) → ℝ,
+      -- gK is a sequence of GMMs
+      (∀ K : ℕ, IsPdf (g K)) ∧
+        (∀ K : ℕ,
+          ∃ (m : ℕ) (w : Fin m → ℝ) (μ : Fin m → Fin n → ℝ), -- we have m weights and m means
+            IsMixtureWeights w ∧
+              (∀ i : Fin m, ‖WithLp.toLp 2 (μ i)‖ ≤ ((K : ℝ) + 1) * Real.sqrt (n : ℝ)) ∧
+              g K =
+                gmmPDF n m (((1 : ℝ) / ((K : ℝ) + 1)) ^ 2 • C)
+                  (posDef_sq_smul hC (by positivity : (0 : ℝ) < (1 : ℝ) / ((K : ℝ) + 1))) w μ) ∧
+        -- convergence of the sequence of GMMs
+        (∀ ε > 0,
+          ∃ K₀ : ℕ,
+            ∀ K ≥ K₀,
+              ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |f h - g K h|) ∂volume <
+                ENNReal.ofReal ε) := by
+```
+
 ## Miscellaneous Notes
 
 ```console
