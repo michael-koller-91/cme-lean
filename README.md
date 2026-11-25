@@ -148,7 +148,7 @@ theorem gmm_density_weighted_L1
           ∃ K₀ : ℕ,
             ∀ K ≥ K₀,
               ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |f h - g K h|) ∂volume <
-                ENNReal.ofReal ε) := by
+                ENNReal.ofReal ε)
 ```
 
 ## Miscellaneous Notes
