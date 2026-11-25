@@ -15,7 +15,8 @@ open scoped Matrix MatrixOrder ENNReal
 --
 
 /-- The multivariate Gaussian probability density function. -/
-@[expose] public noncomputable def multivariateGaussianPDF
+@[expose]
+public noncomputable def multivariateGaussianPDF
     -- Let n be a natural number.
     (n : ℕ)
     -- Mean vector in R^n.
@@ -138,7 +139,8 @@ public noncomputable def cmeR
   ∫ h : EuclideanSpace ℝ (Fin n), ((noiseDensR m n S hS A y h * f h) / fyPDFR m n S hS A f y) • h
 
 /-- `f` is a probability density function w.r.t. `volume` on `EuclideanSpace ℝ (Fin n)`: nonnegative with total mass `1`. -/
-@[expose] public def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
+@[expose]
+public def IsPdf (f : EuclideanSpace ℝ (Fin n) → ℝ) : Prop :=
   0 ≤ f ∧ ∫ x, f x ∂volume = 1
 
 /-- `f` vanishes at infinity: `f x → 0` as `x` leaves every compact set. On the proper space
@@ -395,11 +397,11 @@ theorem stdGaussian_eq_withDensity {ι : Type*} [Fintype ι] :
 `B` with positive determinant, pulling the integrand back along `x ↦ μ + B x` scales the
 integral by `B.det` (Step 3 of `plan_integral_norm_gaussian_bounded.md`: the substitution
 `x ↦ μ + √Σ x` in the Fourier integral of the Gaussian density). -/
-public theorem integral_subst {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F] [NormedSpace ℝ F]
-    [CompleteSpace F] [OpensMeasurableSpace F] [TopologicalSpace.PseudoMetrizableSpace F]
-    [SecondCountableTopology F] (n : ℕ) (μ : EuclideanSpace ℝ (Fin n))
-    (B : Matrix (Fin n) (Fin n) ℝ) (hBdet : 0 < B.det) (f : EuclideanSpace ℝ (Fin n) → F)
-    (hf : AEMeasurable f volume) :
+public theorem integral_subst {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F]
+    [NormedSpace ℝ F] [CompleteSpace F] [OpensMeasurableSpace F]
+    [TopologicalSpace.PseudoMetrizableSpace F] [SecondCountableTopology F] (n : ℕ)
+    (μ : EuclideanSpace ℝ (Fin n)) (B : Matrix (Fin n) (Fin n) ℝ) (hBdet : 0 < B.det)
+    (f : EuclideanSpace ℝ (Fin n) → F) (hf : AEMeasurable f volume) :
     ∫ x, f x ∂volume =
       (B.det : ℝ) • ∫ x, f (μ + (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) x) ∂volume := by
   have hLdet : LinearMap.det (Matrix.toEuclideanLin (𝕜 := ℝ) (m := Fin n) B) = B.det := by
@@ -936,8 +938,8 @@ public theorem multivariateGaussianPDF_eq (n : ℕ) (m : Fin n → ℝ) (Cov : M
   rfl
 
 /-- Measurability of the multivariate Gaussian PDF. -/
-public theorem measurable_multivariateGaussianPDF (n : ℕ) (m : Fin n → ℝ) (Cov : Matrix (Fin n) (Fin n) ℝ)
-    (hC : Cov.PosDef) :
+public theorem measurable_multivariateGaussianPDF (n : ℕ) (m : Fin n → ℝ)
+    (Cov : Matrix (Fin n) (Fin n) ℝ) (hC : Cov.PosDef) :
     Measurable (fun x : EuclideanSpace ℝ (Fin n) => multivariateGaussianPDF n m Cov hC x) := by
   simp only [multivariateGaussianPDF_eq n m Cov hC]
   fun_prop
@@ -1225,8 +1227,7 @@ theorem integral_noise_pullback (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS :
 /-- The multivariate Gaussian pdf is bounded above by its normalizing constant: the quadratic
 form `uᵀ Σ⁻¹ u` in the exponent is nonnegative, so the exponential factor is at most `1`. -/
 public theorem multivariateGaussianPDF_le_const (n : ℕ) (m : Fin n → ℝ)
-    (Cov : Matrix (Fin n) (Fin n) ℝ)
-    (hC : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) :
+    (Cov : Matrix (Fin n) (Fin n) ℝ) (hC : Cov.PosDef) (x : EuclideanSpace ℝ (Fin n)) :
     multivariateGaussianPDF n m Cov hC x ≤
       ((2 * Real.pi) ^ ((n : ℝ) / 2) * Real.sqrt Cov.det)⁻¹ := by
   rw [multivariateGaussianPDF_eq n m Cov hC x]
@@ -1653,10 +1654,10 @@ theorem charFun_map_fy (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef
 
 /-- Left-translation invariance of `volume` integrals on `EuclideanSpace ℝ (Fin n)`: for any
 `c`, integrals along `y ↦ toLp 2 (c + y)` are unchanged. -/
-public theorem integral_toLp_trans {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F] [NormedSpace ℝ F]
-    [CompleteSpace F] [OpensMeasurableSpace F] [TopologicalSpace.PseudoMetrizableSpace F]
-    [SecondCountableTopology F] (n : ℕ) (c : Fin n → ℝ) (g : EuclideanSpace ℝ (Fin n) → F)
-    (hg : MeasureTheory.AEStronglyMeasurable g volume) :
+public theorem integral_toLp_trans {F : Type*} [MeasurableSpace F] [NormedAddCommGroup F]
+    [NormedSpace ℝ F] [CompleteSpace F] [OpensMeasurableSpace F]
+    [TopologicalSpace.PseudoMetrizableSpace F] [SecondCountableTopology F] (n : ℕ) (c : Fin n → ℝ)
+    (g : EuclideanSpace ℝ (Fin n) → F) (hg : MeasureTheory.AEStronglyMeasurable g volume) :
     ∫ y : EuclideanSpace ℝ (Fin n), g (WithLp.toLp 2 (c + (y : Fin n → ℝ))) ∂volume =
       ∫ y : EuclideanSpace ℝ (Fin n), g y ∂volume := by
   have hTmeas :
@@ -3360,8 +3361,8 @@ theorem fy_pos (n : ℕ) (S : Matrix (Fin n) (Fin n) ℝ) (hS : S.PosDef) (A : M
   exact one_ne_zero hintf
 
 /-- Continuity of the Gaussian pdf (used by Step B.4 `fy_cont`). -/
-public theorem multivariateGaussianPDF_continuous (n : ℕ) (m : Fin n → ℝ) (Cov : Matrix (Fin n) (Fin n) ℝ)
-    (hC : Cov.PosDef) :
+public theorem multivariateGaussianPDF_continuous (n : ℕ) (m : Fin n → ℝ)
+    (Cov : Matrix (Fin n) (Fin n) ℝ) (hC : Cov.PosDef) :
     Continuous (fun x : EuclideanSpace ℝ (Fin n) => multivariateGaussianPDF n m Cov hC x) := by
   simp only [multivariateGaussianPDF]
   fun_prop
@@ -4957,7 +4958,8 @@ public theorem cme_uniform_balls_R
       ∀ ε > 0,
         ∃ K₀ : ℕ,
           ∀ K ≥ K₀,
-            ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume < ENNReal.ofReal ε)
+            ∫⁻ h : EuclideanSpace ℝ (Fin n), ENNReal.ofReal ((1 + ‖h‖) * |fh h - fhK K h|) ∂volume <
+              ENNReal.ofReal ε)
     -- Let r > 0 be a radius.
     (r : ℝ) (hr : 0 < r) :
     -- Then we have locally uniform convergence.
