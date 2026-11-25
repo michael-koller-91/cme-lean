@@ -1,5 +1,7 @@
 # CME Lean
 
+[![Lean Action CI](https://github.com/michael-koller-91/cme-lean/actions/workflows/lean_action_ci.yml/badge.svg)](https://github.com/michael-koller-91/cme-lean/actions/workflows/lean_action_ci.yml)
+
 This is a Lean 4 (Mathlib) formalization of **Theorem 2** of the paper
 
 > M. Koller, B. Fesl, N. Turan, and W. Utschick, "An Asymptotically MSE-Optimal
